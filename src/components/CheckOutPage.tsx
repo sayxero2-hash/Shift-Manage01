@@ -83,7 +83,7 @@ export default function CheckOutPage() {
     };
   }, [teamId]);
 
-  const handleCheckOut = async (log: ShiftLog) => {
+    const handleCheckOut = async (log: ShiftLog) => {
     setProcessingId(log.id);
     setNotification(null);
 
@@ -95,12 +95,23 @@ export default function CheckOutPage() {
         throw new Error('Check-out time cannot be earlier than check-in time.');
       }
 
+      // တကယ့် ဆင်းခဲ့သည့် ကြာချိန် (နာရီ)
       const diffMs = checkOutTimeObj.getTime() - checkInTimeObj.getTime();
       const totalHoursDecimal = diffMs / (1000 * 60 * 60);
 
-      const standardThreshold = 8.0;
-      const normalHours = Number(Math.min(totalHoursDecimal, standardThreshold).toFixed(2));
-      const otHours = Number(Math.max(0, totalHoursDecimal - standardThreshold).toFixed(2));
+      const standardThreshold = 8.0; // Standard 8 Hours
+      
+      let normalHours = 0;
+      let otHours = 0;
+
+      // 🛑 Rule: အလုပ်ချိန် ၈ နာရီ မပြည့်ဘဲ စောပြန်ပါက အဲ့ဒီနေ့အတွက် လစာ (0 Hours) သတ်မှတ်မည်။
+      if (totalHoursDecimal >= standardThreshold) {
+        normalHours = standardThreshold; // ၈ နာရီ ပြည့်ပါက 8 Hours
+        otHours = Number(Math.max(0, totalHoursDecimal - standardThreshold).toFixed(2)); // ၈ နာရီထက် ပိုလျှင် OT
+      } else {
+        normalHours = 0; // ၈ နာရီ မပြည့်ပါက စောပြန်/Half-day ဖြစ်၍ လစာမရပါ (0 Hours)
+        otHours = 0;
+      }
 
       const { error: updateError } = await supabase
         .from('shift_logs')
@@ -109,15 +120,23 @@ export default function CheckOutPage() {
           total_hours: normalHours,
           ot_hours: otHours,
           status: 'completed',
+          shift_name: totalHoursDecimal < standardThreshold ? `${log.shift_name} (Early Leave - Unpaid)` : log.shift_name
         })
         .eq('id', log.id);
 
       if (updateError) throw updateError;
 
-      showNotification(
-        'success', 
-        `Checked out ${log.name} successfully. Worked: ${normalHours}h (OT: ${otHours}h)`
-      );
+      if (totalHoursDecimal < standardThreshold) {
+        showNotification(
+          'error', 
+          `Checked out ${log.name}. Worked only ${totalHoursDecimal.toFixed(1)}h (< 8h threshold). Marked as Unpaid Early Leave.`
+        );
+      } else {
+        showNotification(
+          'success', 
+          `Checked out ${log.name} successfully. Worked: ${normalHours}h (OT: ${otHours}h)`
+        );
+      }
       
       fetchActiveCheckIns();
     } catch (err: any) {
@@ -126,6 +145,7 @@ export default function CheckOutPage() {
       setProcessingId(null);
     }
   };
+
 
   const filteredCheckIns = activeCheckIns.filter((log) => {
     const matchesShift = selectedShiftFilter === 'ALL' || log.shift_name === selectedShiftFilter;

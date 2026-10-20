@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  LogIn, Clock, ShieldCheck, UserCheck, UserPlus, KeyRound, 
+  LogIn, Clock, ShieldCheck, UserPlus, KeyRound, 
   ArrowLeft, Users, Building2, Calendar, LayoutDashboard, 
   LogOut, CheckCircle2, Send, Globe, Bot, User 
 } from 'lucide-react';
@@ -69,7 +69,7 @@ const translations = {
     checkInChatTitle: "ผู้ช่วยแชทบันทึกเวลาทำงาน",
     checkInPrompt: "พิมพ์ 'Check In' หรือ 'Check Out' หรือคลิกปุ่มด้านล่าง:",
     checkInBtn: "ลงชื่อเข้างาน",
-    checkOutBtn: "ลงชื่อ 1 ออกงาน",
+    checkOutBtn: "ลงชื่อออกงาน",
     alreadyCheckedIn: "คุณได้ลงชื่อเข้างานสำหรับวันนี้แล้ว!",
     checkedInSuccess: "✅ ลงชื่อเข้างานสำเร็จเมื่อเวลา",
     checkedOutSuccess: "👋 ลงชื่อออกงานเรียบร้อยแล้ว ขอให้เป็นวันที่ดี!",
@@ -81,7 +81,7 @@ const translations = {
     signUp: "注册",
     dashboard: "仪表盘",
     shiftRoster: "排班表",
-    team成员: "团队成员",
+    teamMembers: "团队成员",
     welcome: "欢迎回来",
     checkInChatTitle: "考勤助手聊天",
     checkInPrompt: "输入 'Check In' 或 'Check Out' 或点击下方按钮：",
@@ -95,7 +95,7 @@ const translations = {
 };
 
 export default function App() {
-  const [lang, setLang] =- useState<Language>('my'); // Default to Myanmar
+  const [lang, setLang] = useState<Language>('my');
   const t = translations[lang];
 
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -106,7 +106,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Chat Check-in State
   const [isCheckedIn, setIsCheckedIn] = useState(false);
@@ -506,13 +505,13 @@ export default function App() {
                 <span className="text-xs text-slate-400 font-medium">Quick Actions:</span>
                 <button
                   onClick={() => handleSendMessage('Check In')}
-                  className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" /> {t.checkInBtn}
                 </button>
                 <button
                   onClick={() => handleSendMessage('Check Out')}
-                  className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Clock className="w-3.5 h-3.5" /> {t.checkOutBtn}
                 </button>
@@ -530,7 +529,7 @@ export default function App() {
                 />
                 <button
                   onClick={() => handleSendMessage()}
-                  className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center"
+                  className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center cursor-pointer"
                 >
                   <Send className="w-5 h-5" />
                 </button>
@@ -590,4 +589,3 @@ export default function App() {
     </div>
   );
 }
-

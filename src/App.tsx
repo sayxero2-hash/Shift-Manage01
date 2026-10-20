@@ -47,8 +47,6 @@ interface ChatMessage {
   text: string;
   time: string;
   isFormattedList?: boolean;
-  isActionCard?: boolean;
-  actionData?: { type: 'add' | 'resign'; id: string; name: string; team: string };
 }
 
 const translations = {
@@ -56,53 +54,51 @@ const translations = {
     appName: "ShiftMaster HR",
     signIn: "Sign In",
     signUp: "Sign Up",
-    dashboard: "Team Chat & Staff Management",
+    dashboard: "Team Chat & Dashboard",
     shiftRoster: "Shift Roster & Live",
     teamMembers: "Team Members",
     workDaysOT: "Work Days / OT",
     spdControl: "SPD Master Control",
     welcome: "Welcome back",
-    checkInChatTitle: "Messenger Chat Assistant",
-    checkInPrompt: "Type ID or '+ Add: ID, Name' or '- Resign: ID'...",
+    checkInChatTitle: "Team Chat Assistant",
+    checkInPrompt: "Type Staff IDs (e.g. PPS50, PPS61)...",
     checkInBtn: "ပို့မည်",
     shiftLabel: "Shift Type",
     dateTimeLabel: "Date & Time",
     dayShift: "Day Shift",
     nightShift: "Night Shift",
     signOut: "Sign Out",
-    liveTrackingTitle: "Live Check-in / Check-out Shift Roster Management",
   },
   my: {
     appName: "ShiftMaster HR",
     signIn: "အကောင့်ဝင်ရန်",
     signUp: "အကောင့်အသစ်ဖွင့်ရန်",
-    dashboard: "Team Chat နှင့် ဝန်ထမ်းစီမံရန်",
+    dashboard: "Team Chat နှင့် ဒက်ရှ်ဘုတ်",
     shiftRoster: "အလုပ်ချိန်ဇယားနှင့် Live",
     teamMembers: "အဖွဲ့ဝင်များ",
     workDaysOT: "အလုပ်ရက် / အိုတီ (WD/OT)",
     spdControl: "SPD မာစတာ ထိန်းချုပ်ရန်",
     welcome: "ပြန်လည်ကြိုဆိုပါတယ်",
-    checkInChatTitle: "Messenger Chat လက်ထောက်",
-    checkInPrompt: "ID ရိုက်ပါ သို့မဟုတ် '+ Add: ID, Name' ဟု ရိုက်ပါ...",
+    checkInChatTitle: "Team Chat လက်ထောက်",
+    checkInPrompt: "ဝန်ထမ်း ID များ ရိုက်ထည့်ပါ (ဥပမာ- PPS50, PPS61)...",
     checkInBtn: "ပို့မည်",
     shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
     dateTimeLabel: "ရက်စွဲနှင့် အချိန်",
     dayShift: "နေ့ဘက်အလုပ်ချိန် (Day Shift)",
     nightShift: "ညဘက်အလုပ်ချိန် (Night Shift)",
     signOut: "ထွက်ရန်",
-    liveTrackingTitle: "Live ဝင်ချိန်/ထွက်ချိန် နှင့် အလုပ်ချိန်ဇယား စီမံရန်",
   },
   th: {
     appName: "ShiftMaster HR",
     signIn: "เข้าสู่ระบบ",
     signUp: "สมัครสมาชิก",
-    dashboard: "แชททีมและการจัดการ",
+    dashboard: "แชททีม & แดชบอร์ด",
     shiftRoster: "ตารางกะ & สด",
     teamMembers: "สมาชิกในทีม",
     workDaysOT: "วันทำงาน / OT",
     spdControl: "การควบคุม SPD",
     welcome: "ยินดีต้อนรับกลับมา",
-    checkInChatTitle: "ผู้ช่วยแชท Messenger",
+    checkInChatTitle: "ผู้ช่วยแชททีม",
     checkInPrompt: "พิมพ์รหัสพนักงาน...",
     checkInBtn: "ส่ง",
     shiftLabel: "ประเภทกะงาน",
@@ -110,19 +106,18 @@ const translations = {
     dayShift: "กะกลางวัน",
     nightShift: "กะกลางคืน",
     signOut: "ออกจากระบบ",
-    liveTrackingTitle: "จัดการเวลาเข้า/ออกงานสด",
   },
   zh: {
     appName: "ShiftMaster HR",
     signIn: "登录",
     signUp: "注册",
-    dashboard: "团队聊天与管理",
+    dashboard: "团队聊天与仪表盘",
     shiftRoster: "排班表与实时",
     teamMembers: "团队成员",
     workDaysOT: "工作日 / 加班",
     spdControl: "SPD 控制面板",
     welcome: "欢迎回来",
-    checkInChatTitle: "Messenger 聊天助手",
+    checkInChatTitle: "团队聊天助手",
     checkInPrompt: "输入员工ID...",
     checkInBtn: "发送",
     shiftLabel: "班次类型",
@@ -130,7 +125,6 @@ const translations = {
     dayShift: "白班",
     nightShift: "夜班",
     signOut: "登出",
-    liveTrackingTitle: "实时签到/签退排班管理",
   }
 };
 
@@ -157,11 +151,14 @@ export default function App() {
     { id: 'PPS71', name: 'Mr. Kyaw Lin Oo', role: 'employee', team: 'Team A', status: 'Active' }
   ]);
 
-  // Signup Requests & Free Trial Management by SPD
   const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([
     { id: 'req1', name: 'Factory Manager A', email: 'factoryA@gmail.com', status: 'Pending', freeTrialDays: 7 },
     { id: 'req2', name: 'Service Lead B', email: 'serviceB@gmail.com', status: 'Approved', freeTrialDays: 14 }
   ]);
+
+  const [newStaffId, setNewStaffId] = useState('');
+  const [newStaffName, setNewStaffName] = useState('');
+  const [selectedTeamForAdd, setSelectedTeamForAdd] = useState('Team A');
 
   const [adminPermissions, setAdminPermissions] = useState({
     canEditTime: true,
@@ -171,6 +168,7 @@ export default function App() {
   const [bulkText, setBulkText] = useState('');
   const [bulkTeam, setBulkTeam] = useState('Team A');
 
+  // Shift & Date Time State on Team Chat Dashboard
   const [selectedShiftType, setSelectedShiftType] = useState<'Day' | 'Night'>('Day');
   const [customDateTime, setCustomDateTime] = useState('21/10/2026, 08:00 AM');
   const [inputMessage, setInputMessage] = useState('');
@@ -183,7 +181,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { 
       sender: 'bot', 
-      text: '🤖 မင်္ဂလာပါ! ဤ Messenger Chat ထဲတွင် Shift စာရင်းထုတ်ယူနိုင်သလို\n• လူသစ်ထည့်ရန်: "+ Add: PPS102, Ko Naing"\n• အလုပ်ထွက်ရန်: "- Resign: PPS50"\nဟု တိုက်ရိုက်ရိုက်ထည့်နိုင်ပါသည်။', 
+      text: '🤖 မင်္ဂလာပါ! ဤ Team Chat ထဲတွင် Date & Time, Shift (Day/Night) တို့ကို ရွေးချယ်ပြီး Staff ID များ ထည့်သွင်းကာ Messenger စာရင်း ထုတ်ယူနိုင်ပါသည်။', 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
@@ -217,13 +215,12 @@ export default function App() {
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (identifier && password && fullName) {
-      // Add to SPD Approval Requests
       const newReq: SignupRequest = {
         id: 'req_' + Date.now(),
         name: fullName,
         email: identifier,
         status: 'Pending',
-        freeTrialDays: 7 // Default 7 days free trial
+        freeTrialDays: 7
       };
       setSignupRequests([newReq, ...signupRequests]);
       alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု (Free Trial Request) အောင်မြင်ပါသည်။ SPD မှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
@@ -245,6 +242,33 @@ export default function App() {
       setTeams([...teams, newTeamName]);
       setNewTeamName('');
     }
+  };
+
+  const handleDirectAddStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffId || !newStaffName) return;
+
+    if (staffList.some(s => s.id.toUpperCase() === newStaffId.toUpperCase())) {
+      alert('ဤ Staff ID မှာ စနစ်ထဲတွင် ရှိပြီးသားဖြစ်ပါသည်။');
+      return;
+    }
+
+    const newStaff: StaffMember = {
+      id: newStaffId.toUpperCase(),
+      name: newStaffName,
+      role: 'employee',
+      team: selectedTeamForAdd,
+      status: 'Active'
+    };
+
+    setStaffList([...staffList, newStaff]);
+    setNewStaffId('');
+    setNewStaffName('');
+    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${selectedTeamForAdd} သို့ အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။`);
+  };
+
+  const toggleStaffStatus = (id: string) => {
+    setStaffList(staffList.map(s => s.id === id ? { ...s, status: s.status === 'Active' ? 'Resigned' : 'Active' } : s));
   };
 
   const handleBulkImport = (e: React.FormEvent) => {
@@ -278,10 +302,6 @@ export default function App() {
     alert(`Successfully imported ${addedCount} staff members into ${bulkTeam}!`);
   };
 
-  const toggleStaffStatus = (id: string) => {
-    setStaffList(staffList.map(s => s.id === id ? { ...s, status: s.status === 'Active' ? 'Resigned' : 'Active' } : s));
-  };
-
   const handleAssignAdmin = (id: string, newRole: 'employee' | 'team_admin', newTeam: string) => {
     setStaffList(staffList.map(s => s.id === id ? { ...s, role: newRole, team: newTeam } : s));
   };
@@ -297,60 +317,12 @@ export default function App() {
     }
   };
 
+  // Team Chat Shift & Staff List Generator
   const handleChatSubmit = () => {
     const text = inputMessage.trim();
     if (!text) return;
 
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const userTeam = currentUser?.assignedTeam || 'Team A';
-
-    if (text.toLowerCase().startsWith('+ add') || text.toLowerCase().startsWith('add:')) {
-      const cleanText = text.replace(/^\+?\s*add[:\s]*/i, '');
-      const parts = cleanText.split(/[,]+/);
-      if (parts.length >= 2) {
-        const newId = parts[0].trim().toUpperCase();
-        const newName = parts[1].trim();
-
-        setChatMessages(prev => [
-          ...prev,
-          { sender: 'user', text: inputMessage, time: currentTime },
-          { 
-            sender: 'bot', 
-            text: `📝 လူသစ်ဝင်ရောက်မှု တောင်းဆိုချက်:\n- ID: ${newId}\n- Name: ${newName}\n- Team: ${userTeam}\n\nအတည်ပြုရန် ခလုတ်ကို နှိပ်ပါ:`, 
-            time: currentTime,
-            isActionCard: true,
-            actionData: { type: 'add', id: newId, name: newName, team: userTeam }
-          }
-        ]);
-        setInputMessage('');
-        return;
-      }
-    }
-
-    if (text.toLowerCase().startsWith('- resign') || text.toLowerCase().startsWith('resign:')) {
-      const cleanId = text.replace(/^-?\s*resign[:\s]*/i, '').trim().toUpperCase();
-      const targetStaff = staffList.find(s => s.id.toUpperCase() === cleanId);
-
-      if (targetStaff) {
-        setChatMessages(prev => [
-          ...prev,
-          { sender: 'user', text: inputMessage, time: currentTime },
-          { 
-            sender: 'bot', 
-            text: `⚠️ အလုပ်ထွက်စာတင်မှု တောင်းဆိုချက်:\n- ID: ${targetStaff.id}\n- Name: ${targetStaff.name}\n- Team: ${targetStaff.team}\n\nအတည်ပြုရန် ခလုတ်ကို နှိပ်ပါ:`, 
-            time: currentTime,
-            isActionCard: true,
-            actionData: { type: 'resign', id: targetStaff.id, name: targetStaff.name, team: targetStaff.team }
-          }
-        ]);
-        setInputMessage('');
-        return;
-      } else {
-        alert(`❌ မတွေ့ရှိပါ: ${cleanId} ဆိုသော Staff ID မှာ စနစ်ထဲတွင် မရှိပါ။`);
-        return;
-      }
-    }
-
     const rawIds = text.split(/[\s,]+/).map(id => id.trim().toUpperCase()).filter(Boolean);
     const matchedStaff = staffList.filter(s => rawIds.includes(s.id.toUpperCase()) && s.status === 'Active');
 
@@ -385,28 +357,6 @@ export default function App() {
     ]);
 
     setInputMessage('');
-  };
-
-  const handleConfirmAction = (actionData: { type: 'add' | 'resign'; id: string; name: string; team: string }) => {
-    const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (actionData.type === 'add') {
-      if (staffList.some(s => s.id === actionData.id)) {
-        alert('ဤ Staff ID မှာ စနစ်ထဲတွင် ရှိပြီးသားဖြစ်ပါသည်။');
-        return;
-      }
-      setStaffList([...staffList, { id: actionData.id, name: actionData.name, role: 'employee', team: actionData.team, status: 'Active' }]);
-      setChatMessages(prev => [
-        ...prev,
-        { sender: 'bot', text: `✅ အောင်မြင်ပါသည်! ဝန်ထမ်းသစ် ${actionData.name} (${actionData.id}) ကို ထည့်သွင်းပြီးပါပြီ။`, time: currentTime }
-      ]);
-    } else if (actionData.type === 'resign') {
-      setStaffList(staffList.map(s => s.id === actionData.id ? { ...s, status: 'Resigned' } : s));
-      setChatMessages(prev => [
-        ...prev,
-        { sender: 'bot', text: `👋 အောင်မြင်ပါသည်! ဝန်ထမ်း ${actionData.name} (${actionData.id}) ကို အလုပ်ထွက်အဖြစ် အပ်ဒိတ်လုပ်ပြီးပါပြီ။`, time: currentTime }
-      ]);
-    }
   };
 
   const handleCopyText = (text: string, index: number) => {
@@ -520,6 +470,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full pb-20 space-y-6">
+        {/* TEAM CHAT DASHBOARD WITH DATE TIME & SHIFT SELECTOR */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex justify-between items-center">
@@ -529,7 +480,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* CLEAN MESSENGER-STYLE CHAT ASSISTANT */}
+            {/* TEAM CHAT ASSISTANT */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[520px]">
               <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -537,7 +488,7 @@ export default function App() {
                   <span className="text-xs font-bold">{t.checkInChatTitle}</span>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-500/20 text-indigo-400">
-                  MESSENGER CHAT
+                  TEAM CHAT
                 </span>
               </div>
 
@@ -561,25 +512,38 @@ export default function App() {
                         </button>
                       )}
 
-                      {msg.isActionCard && msg.actionData && (
-                        <div className="mt-3 flex gap-2">
-                          <button 
-                            onClick={() => handleConfirmAction(msg.actionData!)}
-                            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Confirm ({msg.actionData.type.toUpperCase()})
-                          </button>
-                        </div>
-                      )}
-
                       <span className="text-[9px] opacity-70 mt-1 block text-right">{msg.time}</span>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Messenger Style Chat Box & Send Button */}
+              {/* Shift & Date Time Controls inside Team Chat */}
               <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.shiftLabel}:</span>
+                    <select 
+                      value={selectedShiftType} 
+                      onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
+                      className="bg-transparent text-xs font-bold text-indigo-400 outline-none w-full cursor-pointer"
+                    >
+                      <option value="Day" className="bg-slate-900">{t.dayShift}</option>
+                      <option value="Night" className="bg-slate-900">{t.nightShift}</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.dateTimeLabel}:</span>
+                    <input 
+                      type="text" 
+                      value={customDateTime} 
+                      onChange={(e) => setCustomDateTime(e.target.value)} 
+                      className="bg-transparent text-xs font-bold text-emerald-400 outline-none w-full"
+                    />
+                  </div>
+                </div>
+
                 <div className="flex gap-2 items-center">
                   <input 
                     type="text" 
@@ -604,38 +568,12 @@ export default function App() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-sm text-indigo-400 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-emerald-400" /> {t.liveTrackingTitle}
+                  <Clock className="w-4 h-4 text-emerald-400" /> Live Check-in / Check-out Records
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">Check-in / Check-out များကို ဤနေရာတွင် တိုက်ရိုက် ကြည့်ရှုပြင်ဆင်နိုင်ပါသည်။</p>
+                <p className="text-xs text-slate-400 mt-1">ဝန်ထမ်းများ၏ ဝင်ချိန်/ထွက်ချိန်များကို ဤနေရာတွင် ချိန်ညှိပြင်ဆင်နိုင်ပါသည်။</p>
               </div>
             </div>
 
-            {/* Check-in / Check-out Toggle or Select Bar */}
-            <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.shiftLabel}:</span>
-                <select 
-                  value={selectedShiftType} 
-                  onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
-                  className="bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-bold text-indigo-400 outline-none"
-                >
-                  <option value="Day">{t.dayShift}</option>
-                  <option value="Night">{t.nightShift}</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.dateTimeLabel}:</span>
-                <input 
-                  type="text" 
-                  value={customDateTime} 
-                  onChange={(e) => setCustomDateTime(e.target.value)} 
-                  className="bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Live Records List */}
             <div className="space-y-2">
               {liveRecords.map((rec) => (
                 <div key={rec.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
@@ -671,19 +609,75 @@ export default function App() {
           </div>
         )}
 
+        {/* TEAM MEMBERS TAB - DIRECT ADD & RESIGN STAFF MANAGEMENT */}
         {activeTab === 'team' && (
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3">
-            <h3 className="font-bold text-sm">{t.teamMembers}</h3>
-            <div className="space-y-2">
-              {staffList.filter(s => s.status === 'Active').map((s, i) => (
-                <div key={i} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
-                  <div>
-                    <p className="font-bold">{s.name} <span className="text-indigo-400">({s.id})</span></p>
-                    <p className="text-[10px] text-slate-400">Team: {s.team} • Role: {s.role}</p>
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
+            <div>
+              <h3 className="font-bold text-sm text-indigo-400 flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-400" /> အဖွဲ့ဝင်များ (Team Members & Staff Management)
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">ဝန်ထမ်းအသစ်ထည့်ရန်နှင့် အလုပ်ထွက်သူများကို ဤနေရာတွင် တိုက်ရိုက် စီမံနိုင်ပါသည်။</p>
+            </div>
+
+            <form onSubmit={handleDirectAddStaff} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <UserPlus className="w-4 h-4 text-emerald-400" /> ဝန်ထမ်းအသစ်ထည့်ရန် (Add New Staff)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input 
+                  type="text" 
+                  required 
+                  value={newStaffId} 
+                  onChange={(e) => setNewStaffId(e.target.value)} 
+                  placeholder="Staff ID (ဥပမာ- PPS102)" 
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none" 
+                />
+                <input 
+                  type="text" 
+                  required 
+                  value={newStaffName} 
+                  onChange={(e) => setNewStaffName(e.target.value)} 
+                  placeholder="Full Name (အမည်)" 
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none" 
+                />
+                <select 
+                  value={selectedTeamForAdd} 
+                  onChange={(e) => setSelectedTeamForAdd(e.target.value)} 
+                  className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none cursor-pointer"
+                >
+                  {teams.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 text-white">
+                <Plus className="w-4 h-4" /> ဝန်ထမ်းအသစ် ထည့်မည်
+              </button>
+            </form>
+
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <h4 className="text-xs font-semibold text-slate-400">လက်ရှိအဖွဲ့ဝင် ဝန်ထမ်းစာရင်းများ ({staffList.length}):</h4>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {staffList.map((s, i) => (
+                  <div key={i} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                    <div>
+                      <p className="font-bold text-white">{s.name} <span className="text-indigo-400">({s.id})</span></p>
+                      <p className="text-[10px] text-slate-400">Team: {s.team} • Role: {s.role}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${s.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                        {s.status}
+                      </span>
+                      <button 
+                        onClick={() => toggleStaffStatus(s.id)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 ${s.status === 'Active' ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'}`}
+                      >
+                        {s.status === 'Active' ? <UserMinus className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                        {s.status === 'Active' ? 'အလုပ်ထွက်ရန် (Resign)' : 'ပြန်လည်လက်ခံရန်'}
+                      </button>
+                    </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px]">{s.status}</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -737,7 +731,7 @@ export default function App() {
           </div>
         )}
 
-        {/* SPD MASTER CONTROL PANEL - SIGNUP REQUESTS & FREE TRIAL MANAGEMENT */}
+        {/* SPD MASTER CONTROL PANEL */}
         {activeTab === 'admin' && currentUser.role === 'spd' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
             <div>
@@ -747,7 +741,6 @@ export default function App() {
               <p className="text-xs text-slate-400 mt-1">Manage Signup Requests, Custom Free Trials, and Team Admins.</p>
             </div>
 
-            {/* SIGNUP & FREE TRIAL REQUESTS MANAGEMENT */}
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                 <UserPlus className="w-4 h-4 text-emerald-400" /> User Signup & Free Trial Requests ({signupRequests.length})
@@ -787,7 +780,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* BULK IMPORT FORM */}
             <form onSubmit={handleBulkImport} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                 <ClipboardPaste className="w-4 h-4 text-emerald-400" /> Bulk Import Staff List

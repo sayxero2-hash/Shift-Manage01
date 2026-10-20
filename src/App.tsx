@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   LogIn, ShieldCheck, UserPlus, 
   ArrowLeft, Users, Building2, Calendar, LayoutDashboard, 
-  LogOut, Send, Globe, Bot, User, Plus, FileText, Download, Printer, Lock, UserMinus, UserCheck, Copy, Check, Edit3, Clock, ClipboardPaste, Key, ShieldAlert 
+  LogOut, Send, Globe, Bot, User, Plus, FileText, Download, Printer, Lock, UserMinus, UserCheck, Copy, Check, Edit3, Clock, ClipboardPaste, Key, ShieldAlert, CheckCircle, XCircle 
 } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup' | 'reset';
@@ -34,6 +34,14 @@ interface LiveShiftRecord {
   team: string;
 }
 
+interface SignupRequest {
+  id: string;
+  name: string;
+  email: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  freeTrialDays: number;
+}
+
 interface ChatMessage {
   sender: 'bot' | 'user';
   text: string;
@@ -49,80 +57,80 @@ const translations = {
     signIn: "Sign In",
     signUp: "Sign Up",
     dashboard: "Team Chat & Staff Management",
-    shiftRoster: "Shift Roster",
+    shiftRoster: "Shift Roster & Live",
     teamMembers: "Team Members",
     workDaysOT: "Work Days / OT",
     spdControl: "SPD Master Control",
     welcome: "Welcome back",
-    checkInChatTitle: "Chat Assistant: Shifts & Staff Add/Resign",
-    checkInPrompt: "Type shift IDs or '+ Add: ID, Name' or '- Resign: ID'...",
-    checkInBtn: "Send / Process",
+    checkInChatTitle: "Messenger Chat Assistant",
+    checkInPrompt: "Type ID or '+ Add: ID, Name' or '- Resign: ID'...",
+    checkInBtn: "ပို့မည်",
     shiftLabel: "Shift Type",
     dateTimeLabel: "Date & Time",
     dayShift: "Day Shift",
     nightShift: "Night Shift",
     signOut: "Sign Out",
-    liveTrackingTitle: "Live Check-in / Check-out Records",
+    liveTrackingTitle: "Live Check-in / Check-out Shift Roster Management",
   },
   my: {
     appName: "ShiftMaster HR",
     signIn: "အကောင့်ဝင်ရန်",
     signUp: "အကောင့်အသစ်ဖွင့်ရန်",
     dashboard: "Team Chat နှင့် ဝန်ထမ်းစီမံရန်",
-    shiftRoster: "အလုပ်ချိန်ဇယား",
+    shiftRoster: "အလုပ်ချိန်ဇယားနှင့် Live",
     teamMembers: "အဖွဲ့ဝင်များ",
     workDaysOT: "အလုပ်ရက် / အိုတီ (WD/OT)",
     spdControl: "SPD မာစတာ ထိန်းချုပ်ရန်",
     welcome: "ပြန်လည်ကြိုဆိုပါတယ်",
-    checkInChatTitle: "Chat လက်ထောက်: Shift ထုတ်ရန်နှင့် လူသစ်/လူထွက် စီမံရန်",
-    checkInPrompt: "ID များ (သို့) '+ Add: PPS102, Ko Ko' သို့မဟုတ် '- Resign: PPS50' ဟု ရိုက်ပါ...",
-    checkInBtn: "ပို့မည် / လုပ်ဆောင်မည်",
+    checkInChatTitle: "Messenger Chat လက်ထောက်",
+    checkInPrompt: "ID ရိုက်ပါ သို့မဟုတ် '+ Add: ID, Name' ဟု ရိုက်ပါ...",
+    checkInBtn: "ပို့မည်",
     shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
     dateTimeLabel: "ရက်စွဲနှင့် အချိန်",
     dayShift: "နေ့ဘက်အလုပ်ချိန် (Day Shift)",
     nightShift: "ညဘက်အလုပ်ချိန် (Night Shift)",
     signOut: "ထွက်ရန်",
-    liveTrackingTitle: "Live ဝင်ချိန်/ထွက်ချိန် မှတ်တမ်းများ",
+    liveTrackingTitle: "Live ဝင်ချိန်/ထွက်ချိန် နှင့် အလုပ်ချိန်ဇယား စီမံရန်",
   },
   th: {
     appName: "ShiftMaster HR",
     signIn: "เข้าสู่ระบบ",
     signUp: "สมัครสมาชิก",
-    dashboard: "แชททีมและการจัดการพนักงาน",
-    shiftRoster: "ตารางกะงาน",
+    dashboard: "แชททีมและการจัดการ",
+    shiftRoster: "ตารางกะ & สด",
     teamMembers: "สมาชิกในทีม",
     workDaysOT: "วันทำงาน / OT",
     spdControl: "การควบคุม SPD",
     welcome: "ยินดีต้อนรับกลับมา",
-    checkInChatTitle: "ผู้ช่วยแชท: จัดกะและเพิ่ม/ลาออกพนักงาน",
-    checkInPrompt: "พิมพ์รหัส หรือ '+ Add: ID, Name' หรือ '- Resign: ID'...",
-    checkInBtn: "ส่ง / ดำเนินการ",
+    checkInChatTitle: "ผู้ช่วยแชท Messenger",
+    checkInPrompt: "พิมพ์รหัสพนักงาน...",
+    checkInBtn: "ส่ง",
     shiftLabel: "ประเภทกะงาน",
     dateTimeLabel: "วันที่และเวลา",
     dayShift: "กะกลางวัน",
     nightShift: "กะกลางคืน",
     signOut: "ออกจากระบบ",
-    liveTrackingTitle: "บันทึกเวลาเข้า/ออกงานสด",
+    liveTrackingTitle: "จัดการเวลาเข้า/ออกงานสด",
   },
   zh: {
     appName: "ShiftMaster HR",
     signIn: "登录",
     signUp: "注册",
-    dashboard: "团队聊天与员工管理",
-    shiftRoster: "排班表",
+    dashboard: "团队聊天与管理",
+    shiftRoster: "排班表与实时",
     teamMembers: "团队成员",
     workDaysOT: "工作日 / 加班",
     spdControl: "SPD 控制面板",
     welcome: "欢迎回来",
-    checkInChatTitle: "聊天助手：班次与员工 增/减 管理",
-    checkInPrompt: "输入ID 或 '+ Add: ID, Name' 或 '- Resign: ID'...",
-    checkInBtn: "发送 / 处理",
+    checkInChatTitle: "Messenger 聊天助手",
+    checkInPrompt: "输入员工ID...",
+    checkInBtn: "发送",
     shiftLabel: "班次类型",
     dateTimeLabel: "日期与时间",
     dayShift: "白班",
     nightShift: "夜班",
     signOut: "登出",
-    liveTrackingTitle: "实时签到/签退记录",
+    liveTrackingTitle: "实时签到/签退排班管理",
   }
 };
 
@@ -149,6 +157,12 @@ export default function App() {
     { id: 'PPS71', name: 'Mr. Kyaw Lin Oo', role: 'employee', team: 'Team A', status: 'Active' }
   ]);
 
+  // Signup Requests & Free Trial Management by SPD
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([
+    { id: 'req1', name: 'Factory Manager A', email: 'factoryA@gmail.com', status: 'Pending', freeTrialDays: 7 },
+    { id: 'req2', name: 'Service Lead B', email: 'serviceB@gmail.com', status: 'Approved', freeTrialDays: 14 }
+  ]);
+
   const [adminPermissions, setAdminPermissions] = useState({
     canEditTime: true,
     canGenerateMessengerList: true,
@@ -169,7 +183,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { 
       sender: 'bot', 
-      text: '🤖 မင်္ဂလာပါ! ဤ Chat ထဲတွင် Shift စာရင်းထုတ်ယူနိုင်သလို ဝန်ထမ်းအသစ်ထည့်ရန် \n"+ Add: PPS102, Ko Naing"\nအလုပ်ထွက်စာတင်ရန် \n"- Resign: PPS50"\nဟု တိုက်ရိုက်ရိုက်ထည့်နိုင်ပါသည်။', 
+      text: '🤖 မင်္ဂလာပါ! ဤ Messenger Chat ထဲတွင် Shift စာရင်းထုတ်ယူနိုင်သလို\n• လူသစ်ထည့်ရန်: "+ Add: PPS102, Ko Naing"\n• အလုပ်ထွက်ရန်: "- Resign: PPS50"\nဟု တိုက်ရိုက်ရိုက်ထည့်နိုင်ပါသည်။', 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
@@ -180,8 +194,7 @@ export default function App() {
       let role: 'spd' | 'team_admin' | 'employee' = 'team_admin';
       let assignedTeam = 'Team A';
 
-      // Check for specific SPD credentials
-      if ((identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') || identifier.toLowerCase().includes('spd')) {
+      if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') {
         role = 'spd';
         assignedTeam = 'All Teams (Master)';
       } else {
@@ -204,9 +217,26 @@ export default function App() {
   const handleSignUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (identifier && password && fullName) {
-      alert('Account created successfully!');
+      // Add to SPD Approval Requests
+      const newReq: SignupRequest = {
+        id: 'req_' + Date.now(),
+        name: fullName,
+        email: identifier,
+        status: 'Pending',
+        freeTrialDays: 7 // Default 7 days free trial
+      };
+      setSignupRequests([newReq, ...signupRequests]);
+      alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု (Free Trial Request) အောင်မြင်ပါသည်။ SPD မှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
       setAuthMode('login');
     }
+  };
+
+  const handleApproveRequest = (id: string, status: 'Approved' | 'Rejected') => {
+    setSignupRequests(signupRequests.map(r => r.id === id ? { ...r, status } : r));
+  };
+
+  const handleUpdateTrialDays = (id: string, days: number) => {
+    setSignupRequests(signupRequests.map(r => r.id === id ? { ...r, freeTrialDays: days } : r));
   };
 
   const handleAddTeam = (e: React.FormEvent) => {
@@ -286,7 +316,7 @@ export default function App() {
           { sender: 'user', text: inputMessage, time: currentTime },
           { 
             sender: 'bot', 
-            text: `📝 လူသစ်ဝင်ရောက်မှု တောင်းဆိုချက်:\n- ID: ${newId}\n- Name: ${newName}\n- Team: ${userTeam}\n\nအောက်ပါခလုတ်ကိုနှိပ်၍ အတည်ပြုပါ (Confirm):`, 
+            text: `📝 လူသစ်ဝင်ရောက်မှု တောင်းဆိုချက်:\n- ID: ${newId}\n- Name: ${newName}\n- Team: ${userTeam}\n\nအတည်ပြုရန် ခလုတ်ကို နှိပ်ပါ:`, 
             time: currentTime,
             isActionCard: true,
             actionData: { type: 'add', id: newId, name: newName, team: userTeam }
@@ -307,7 +337,7 @@ export default function App() {
           { sender: 'user', text: inputMessage, time: currentTime },
           { 
             sender: 'bot', 
-            text: `⚠️ အလုပ်ထွက်စာတင်မှု တောင်းဆိုချက်:\n- ID: ${targetStaff.id}\n- Name: ${targetStaff.name}\n- Team: ${targetStaff.team}\n\nအောက်ပါခလုတ်ကိုနှိပ်၍ အတည်ပြုပါ (Confirm Resign):`, 
+            text: `⚠️ အလုပ်ထွက်စာတင်မှု တောင်းဆိုချက်:\n- ID: ${targetStaff.id}\n- Name: ${targetStaff.name}\n- Team: ${targetStaff.team}\n\nအတည်ပြုရန် ခလုတ်ကို နှိပ်ပါ:`, 
             time: currentTime,
             isActionCard: true,
             actionData: { type: 'resign', id: targetStaff.id, name: targetStaff.name, team: targetStaff.team }
@@ -325,7 +355,7 @@ export default function App() {
     const matchedStaff = staffList.filter(s => rawIds.includes(s.id.toUpperCase()) && s.status === 'Active');
 
     if (matchedStaff.length === 0) {
-      alert('ထည့်သွင်းထားသော Staff ID များ မမှန်ကန်ပါ (သို့) Active မရှိပါ။ (+ Add သို့မဟုတ် - Resign ဖြင့်လည်း စာရင်းသွင်းနိုင်သည်)');
+      alert('ထည့်သွင်းထားသော Staff ID များ မမှန်ကန်ပါ (သို့) Active မရှိပါ။');
       return;
     }
 
@@ -368,13 +398,13 @@ export default function App() {
       setStaffList([...staffList, { id: actionData.id, name: actionData.name, role: 'employee', team: actionData.team, status: 'Active' }]);
       setChatMessages(prev => [
         ...prev,
-        { sender: 'bot', text: `✅ အောင်မြင်ပါသည်! ဝန်ထမ်းသစ် ${actionData.name} (${actionData.id}) ကို ${actionData.team} ထဲသို့ ထည့်သွင်းပြီးပါပြီ။`, time: currentTime }
+        { sender: 'bot', text: `✅ အောင်မြင်ပါသည်! ဝန်ထမ်းသစ် ${actionData.name} (${actionData.id}) ကို ထည့်သွင်းပြီးပါပြီ။`, time: currentTime }
       ]);
     } else if (actionData.type === 'resign') {
       setStaffList(staffList.map(s => s.id === actionData.id ? { ...s, status: 'Resigned' } : s));
       setChatMessages(prev => [
         ...prev,
-        { sender: 'bot', text: `👋 အောင်မြင်ပါသည်! ဝန်ထမ်း ${actionData.name} (${actionData.id}) ကို အလုပ်ထွက် (Resigned) အဖြစ် အပ်ဒိတ်လုပ်ပြီးပါပြီ။`, time: currentTime }
+        { sender: 'bot', text: `👋 အောင်မြင်ပါသည်! ဝန်ထမ်း ${actionData.name} (${actionData.id}) ကို အလုပ်ထွက်အဖြစ် အပ်ဒိတ်လုပ်ပြီးပါပြီ။`, time: currentTime }
       ]);
     }
   };
@@ -430,7 +460,7 @@ export default function App() {
           {authMode === 'signup' && (
             <form onSubmit={handleSignUp} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Full Name</label>
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Company / Full Name</label>
                 <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="John Doe" />
               </div>
               <div>
@@ -499,15 +529,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* CHAT ASSISTANT */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[540px]">
+            {/* CLEAN MESSENGER-STYLE CHAT ASSISTANT */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[520px]">
               <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Bot className="w-4 h-4 text-indigo-400" />
                   <span className="text-xs font-bold">{t.checkInChatTitle}</span>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-500/20 text-indigo-400">
-                  SMART CHAT
+                  MESSENGER CHAT
                 </span>
               </div>
 
@@ -548,100 +578,93 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Chat Controls Panel */}
+              {/* Messenger Style Chat Box & Send Button */}
               <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.shiftLabel}:</span>
-                    <select 
-                      value={selectedShiftType} 
-                      onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
-                      className="bg-transparent text-xs font-bold text-indigo-400 outline-none w-full cursor-pointer"
-                    >
-                      <option value="Day" className="bg-slate-900">{t.dayShift}</option>
-                      <option value="Night" className="bg-slate-900">{t.nightShift}</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.dateTimeLabel}:</span>
-                    <input 
-                      type="text" 
-                      value={customDateTime} 
-                      onChange={(e) => setCustomDateTime(e.target.value)} 
-                      className="bg-transparent text-xs font-bold text-emerald-400 outline-none w-full"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 items-end">
-                  <textarea 
+                <div className="flex gap-2 items-center">
+                  <input 
+                    type="text" 
                     value={inputMessage} 
                     onChange={(e) => setInputMessage(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleChatSubmit()}
                     placeholder={t.checkInPrompt} 
-                    rows={2}
-                    className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none resize-none" 
+                    className="flex-1 px-4 py-3 bg-slate-900 border border-slate-800 rounded-full text-xs text-white outline-none" 
                   />
-                  <button onClick={handleChatSubmit} className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white rounded-xl flex items-center gap-1.5 h-auto">
+                  <button onClick={handleChatSubmit} className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white rounded-full flex items-center gap-1.5 shrink-0">
                     <Send className="w-3.5 h-3.5" /> {t.checkInBtn}
                   </button>
                 </div>
               </div>
             </div>
-
-            {/* LIVE SHIFT TRACKING SECTION */}
-            <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-indigo-400 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-emerald-400" /> {t.liveTrackingTitle}
-                </h3>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-bold">LIVE SYNC</span>
-              </div>
-
-              <div className="space-y-2">
-                {liveRecords.map((rec) => (
-                  <div key={rec.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
-                    <div>
-                      <p className="font-bold text-white">{rec.name} <span className="text-indigo-400">({rec.id})</span></p>
-                      <p className="text-[10px] text-slate-400">{rec.shiftType} • Team: {rec.team} • Date: {rec.date}</p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <p className="text-[10px] text-slate-400">In: <span className="text-emerald-400 font-bold">{rec.checkIn}</span></p>
-                        <p className="text-[10px] text-slate-400">Out: <span className="text-rose-400 font-bold">{rec.checkOut}</span></p>
-                      </div>
-
-                      <div className="flex gap-1">
-                        <button 
-                          onClick={() => handleUpdateLiveTime(rec.id, 'checkIn')}
-                          className="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1"
-                        >
-                          <Edit3 className="w-3 h-3" /> In
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateLiveTime(rec.id, 'checkOut')}
-                          className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1"
-                        >
-                          <Edit3 className="w-3 h-3" /> Out
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
+        {/* SHIFT ROSTER & LIVE TRACKING TAB */}
         {activeTab === 'shifts' && (
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3">
-            <h3 className="font-bold text-sm">{t.shiftRoster}</h3>
+          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-indigo-400 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-emerald-400" /> {t.liveTrackingTitle}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">Check-in / Check-out များကို ဤနေရာတွင် တိုက်ရိုက် ကြည့်ရှုပြင်ဆင်နိုင်ပါသည်။</p>
+              </div>
+            </div>
+
+            {/* Check-in / Check-out Toggle or Select Bar */}
+            <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.shiftLabel}:</span>
+                <select 
+                  value={selectedShiftType} 
+                  onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
+                  className="bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-bold text-indigo-400 outline-none"
+                >
+                  <option value="Day">{t.dayShift}</option>
+                  <option value="Night">{t.nightShift}</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.dateTimeLabel}:</span>
+                <input 
+                  type="text" 
+                  value={customDateTime} 
+                  onChange={(e) => setCustomDateTime(e.target.value)} 
+                  className="bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-bold text-emerald-400 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Live Records List */}
             <div className="space-y-2">
-              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
-                <div key={day} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
-                  <span className="font-bold text-indigo-400">{day}</span>
-                  <span className="text-slate-300">Custom Shift Roster</span>
+              {liveRecords.map((rec) => (
+                <div key={rec.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+                  <div>
+                    <p className="font-bold text-white">{rec.name} <span className="text-indigo-400">({rec.id})</span></p>
+                    <p className="text-[10px] text-slate-400">{rec.shiftType} • Team: {rec.team} • Date: {rec.date}</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-400">In: <span className="text-emerald-400 font-bold">{rec.checkIn}</span></p>
+                      <p className="text-[10px] text-slate-400">Out: <span className="text-rose-400 font-bold">{rec.checkOut}</span></p>
+                    </div>
+
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => handleUpdateLiveTime(rec.id, 'checkIn')}
+                        className="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1"
+                      >
+                        <Edit3 className="w-3 h-3" /> In
+                      </button>
+                      <button 
+                        onClick={() => handleUpdateLiveTime(rec.id, 'checkOut')}
+                        className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1"
+                      >
+                        <Edit3 className="w-3 h-3" /> Out
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -714,42 +737,57 @@ export default function App() {
           </div>
         )}
 
-        {/* SPD MASTER CONTROL PANEL */}
+        {/* SPD MASTER CONTROL PANEL - SIGNUP REQUESTS & FREE TRIAL MANAGEMENT */}
         {activeTab === 'admin' && currentUser.role === 'spd' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
             <div>
               <h3 className="font-bold text-sm text-indigo-400 flex items-center gap-1.5">
                 <ShieldAlert className="w-4 h-4 text-indigo-400" /> 👑 Service Provider (SPD) Master Control
               </h3>
-              <p className="text-xs text-slate-400 mt-1">Manage Team Admins, Access Rights, and Staff Allocations.</p>
+              <p className="text-xs text-slate-400 mt-1">Manage Signup Requests, Custom Free Trials, and Team Admins.</p>
             </div>
 
+            {/* SIGNUP & FREE TRIAL REQUESTS MANAGEMENT */}
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Key className="w-4 h-4 text-amber-400" /> Team Admin Access Permissions
+                <UserPlus className="w-4 h-4 text-emerald-400" /> User Signup & Free Trial Requests ({signupRequests.length})
               </h4>
-              <div className="space-y-2">
-                <label className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs cursor-pointer">
-                  <span className="text-slate-300">Allow Team Admins to Edit Live Check-in/Out Times</span>
-                  <input 
-                    type="checkbox" 
-                    checked={adminPermissions.canEditTime} 
-                    onChange={(e) => setAdminPermissions({ ...adminPermissions, canEditTime: e.target.checked })} 
-                    className="w-4 h-4 accent-indigo-600 rounded"
-                  />
-                </label>
-                <label className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-lg text-xs cursor-pointer">
-                  <span className="text-slate-300">Allow Team Admins to Generate Messenger Lists</span>
-                  <input 
-                    type="checkbox" 
-                    checked={adminPermissions.canGenerateMessengerList} 
-                    onChange={(e) => setAdminPermissions({ ...adminPermissions, canGenerateMessengerList: e.target.checked })} 
-                    className="w-4 h-4 accent-indigo-600 rounded"
-                  />
-                </label>
+              <div className="space-y-2 max-h-50 overflow-y-auto">
+                {signupRequests.map((req) => (
+                  <div key={req.id} className="bg-slate-900 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+                    <div>
+                      <p className="font-bold text-white">{req.name} <span className="text-slate-400">({req.email})</span></p>
+                      <p className="text-[10px] text-slate-400">Status: <span className={`font-bold ${req.status === 'Approved' ? 'text-emerald-400' : req.status === 'Pending' ? 'text-amber-400' : 'text-rose-400'}`}>{req.status}</span></p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
+                        <span className="text-[10px] text-slate-400">Free Trial Days:</span>
+                        <input 
+                          type="number" 
+                          value={req.freeTrialDays} 
+                          onChange={(e) => handleUpdateTrialDays(req.id, parseInt(e.target.value) || 0)} 
+                          className="w-10 bg-transparent text-xs font-bold text-indigo-400 outline-none text-center"
+                        />
+                      </div>
+
+                      {req.status !== 'Approved' && (
+                        <button onClick={() => handleApproveRequest(req.id, 'Approved')} className="px-2.5 py-1.5 bg-emerald-600 text-white font-bold rounded-lg text-[10px] flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Approve
+                        </button>
+                      )}
+                      {req.status !== 'Rejected' && (
+                        <button onClick={() => handleApproveRequest(req.id, 'Rejected')} className="px-2.5 py-1.5 bg-rose-600/20 text-rose-400 font-bold rounded-lg text-[10px] flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> Reject
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
+            {/* BULK IMPORT FORM */}
             <form onSubmit={handleBulkImport} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                 <ClipboardPaste className="w-4 h-4 text-emerald-400" /> Bulk Import Staff List

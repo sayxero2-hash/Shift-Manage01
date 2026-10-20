@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { 
-  LogIn, Clock, ShieldCheck, UserPlus, KeyRound, 
+  LogIn, ShieldCheck, UserPlus, 
   ArrowLeft, Users, Building2, Calendar, LayoutDashboard, 
-  LogOut, CheckCircle2, Send, Globe, Bot, User, Plus, FileText, Download, Printer, Lock, UserMinus, UserCheck, Copy, Check 
+  LogOut, Send, Globe, Bot, User, Plus, FileText, Download, Printer, Lock, UserMinus, UserCheck, Copy, Check 
 } from 'lucide-react';
 
 type AuthMode = 'login' | 'signup' | 'reset';
@@ -43,8 +43,12 @@ const translations = {
     spdControl: "SPD Control (Staff & Teams)",
     welcome: "Welcome back",
     checkInChatTitle: "Shift Roster & Messenger List Assistant",
-    checkInPrompt: "Select Shift Time & enter Staff IDs...",
+    checkInPrompt: "Enter Staff IDs (e.g. PPS50, PPS61)...",
     checkInBtn: "Generate Shift List",
+    shiftLabel: "Shift Type",
+    dateTimeLabel: "Date & Time",
+    dayShift: "Day Shift",
+    nightShift: "Night Shift",
     signOut: "Sign Out",
   },
   my: {
@@ -60,6 +64,10 @@ const translations = {
     checkInChatTitle: "Shift အလိုက် ဝန်ထမ်းစာရင်း ထုတ်ပေးပြီး Messenger တိုင်ရန်",
     checkInPrompt: "ဝန်ထမ်း ID များ ရိုက်ထည့်ပါ (ဥပမာ- PPS50, PPS61)...",
     checkInBtn: "Shift စာရင်း ထုတ်မည်",
+    shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
+    dateTimeLabel: "ရက်စွဲနှင့် အချိန် (Date & Time)",
+    dayShift: "နေ့ဘက်အလုပ်ချိန် (Day Shift)",
+    nightShift: "ညဘက်အလုပ်ချိန် (Night Shift)",
     signOut: "ထွက်ရန်",
   },
   th: {
@@ -73,8 +81,12 @@ const translations = {
     spdControl: "การควบคุม SPD",
     welcome: "ยินดีต้อนรับกลับมา",
     checkInChatTitle: "ผู้ช่วยจัดกะและคัดลอกรายชื่อส่ง Messenger",
-    checkInPrompt: "เลือกเวลาและใส่รหัสพนักงาน...",
+    checkInPrompt: "ป้อนรหัสพนักงาน (เช่น PPS50, PPS61)...",
     checkInBtn: "สร้างรายการกะงาน",
+    shiftLabel: "ประเภทกะงาน",
+    dateTimeLabel: "วันที่และเวลา",
+    dayShift: "กะกลางวัน",
+    nightShift: "กะกลางคืน",
     signOut: "ออกจากระบบ",
   },
   zh: {
@@ -83,13 +95,17 @@ const translations = {
     signUp: "注册",
     dashboard: "排班打卡聊天",
     shiftRoster: "排班表",
-    teamMembers: "团队成员",
+    team成员: "团队成员",
     workDaysOT: "工作日 / 加班",
     spdControl: "SPD 控制面板",
     welcome: "欢迎回来",
     checkInChatTitle: "班次生成与 Messenger 列表助手",
-    checkInPrompt: "选择班次时间并输入员工ID...",
+    checkInPrompt: "输入员工ID（例如 PPS50, PPS61）...",
     checkInBtn: "生成班次列表",
+    shiftLabel: "班次类型",
+    dateTimeLabel: "日期与时间",
+    dayShift: "白班",
+    nightShift: "夜班",
     signOut: "登出",
   }
 };
@@ -107,11 +123,9 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
-  // SPD Managed Teams
   const [teams, setTeams] = useState<string[]>(['Engineering Team A', 'HR Operations', 'Sales Team B']);
   const [newTeamName, setNewTeamName] = useState('');
 
-  // SPD Managed Staff Records
   const [staffList, setStaffList] = useState<StaffMember[]>([
     { id: 'PPS50', name: 'Mr. Zaw Lin Maung', role: 'employee', team: 'Engineering Team A', status: 'Active' },
     { id: 'PPS61', name: 'Miss. Hla Hla Win', role: 'employee', team: 'Engineering Team A', status: 'Active' },
@@ -120,21 +134,19 @@ export default function App() {
     { id: 'PPS71', name: 'Mr. Kyaw Lin Oo', role: 'employee', team: 'Engineering Team A', status: 'Active' }
   ]);
 
-  // SPD Inputs
   const [newStaffId, setNewStaffId] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffTeam, setNewStaffTeam] = useState('Engineering Team A');
 
-  // Dynamic Shift Controls for Team Admin
   const [selectedShiftType, setSelectedShiftType] = useState<'Day' | 'Night'>('Day');
-  const [shiftTimeInput, setShiftTimeInput] = useState('08:00 AM');
+  const [customDateTime, setCustomDateTime] = useState('21/10/2026, 08:00 AM');
   const [inputMessage, setInputMessage] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { 
       sender: 'bot', 
-      text: 'မင်္ဂလာပါ Team Admin! Shift ဝင်ချိန် (Day/Night) ရွေးချယ်ပြီး ဝန်ထမ်း ID များကို ရိုက်ထည့်၍ Messenger တိုင်ရန် Staff Name List စာရင်း ထုတ်ယူနိုင်ပါသည်။', 
+      text: 'မင်္ဂလာပါ Team Admin! ဝန်ထမ်း ID များကို မှန်ကန်စွာ ရိုက်ထည့်၍ Shift စာရင်း ထုတ်ယူနိုင်ပါသည်။', 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
@@ -143,11 +155,9 @@ export default function App() {
     e.preventDefault();
     if (identifier && password) {
       let role: 'spd' | 'team_admin' | 'employee' = 'team_admin';
-      
       if (adminCode === 'SPD2026' || identifier.toLowerCase().includes('spd')) {
         role = 'spd';
       }
-
       setCurrentUser({
         name: fullName || (identifier.includes('@') ? identifier.split('@')[0] : 'Team Admin'),
         identifier: identifier,
@@ -186,7 +196,7 @@ export default function App() {
       setStaffList([...staffList, newEntry]);
       setNewStaffId('');
       setNewStaffName('');
-      alert(`Staff ${newStaffName} (${newStaffId}) added and assigned to ${newStaffTeam}`);
+      alert(`Staff ${newStaffName} (${newStaffId}) added.`);
     }
   };
 
@@ -194,30 +204,32 @@ export default function App() {
     setStaffList(staffList.map(s => s.id === id ? { ...s, status: s.status === 'Active' ? 'Resigned' : 'Active' } : s));
   };
 
-  // Generate Messenger List from Staff IDs and Shift Time
+  // Strict Validation: Match exact Staff IDs from database
   const handleGenerateShiftList = () => {
     const rawIds = inputMessage.split(/[\s,]+/).map(id => id.trim().toUpperCase()).filter(Boolean);
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    let matchedStaff = staffList.filter(s => rawIds.includes(s.id.toUpperCase()) && s.status === 'Active');
+    // Filter only staff whose IDs match what admin entered and are Active
+    const matchedStaff = staffList.filter(s => rawIds.includes(s.id.toUpperCase()) && s.status === 'Active');
 
-    if (matchedStaff.length === 0 && staffList.length > 0) {
-      matchedStaff = staffList.filter(s => s.status === 'Active').slice(0, 3);
+    if (matchedStaff.length === 0) {
+      alert('ထည့်သွင်းထားသော Staff ID များ မမှန်ကန်ပါ (သို့) Active မရှိပါ။ ကျေးဇူးပြု၍ မှန်ကန်သော ID များ ထည့်ပါ။');
+      return;
     }
 
-    const todayDate = new Date().toLocaleDateString();
+    const shiftTitleName = selectedShiftType === 'Day' ? t.dayShift : t.nightShift;
 
-    let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date: ${todayDate}\n⏰ Shift: ${selectedShiftType} Shift (${shiftTimeInput})\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
+    let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date & Time: ${customDateTime}\n⏰ Shift: ${shiftTitleName}\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
 
     matchedStaff.forEach((st, idx) => {
       formattedText += `${idx + 1}. ${st.id} - ${st.name}\n`;
     });
 
-    formattedText += `------------------------------\n✅ Please arrive 10 mins before ${shiftTimeInput}. Have a good shift!`;
+    formattedText += `------------------------------\n✅ Please arrive on time. Have a good shift!`;
 
     setChatMessages(prev => [
       ...prev,
-      { sender: 'user', text: `Generated ${selectedShiftType} Shift (${shiftTimeInput}) for ${matchedStaff.length} staff`, time: currentTime },
+      { sender: 'user', text: `IDs: ${rawIds.join(', ')} (${shiftTitleName} - ${customDateTime})`, time: currentTime },
       { sender: 'bot', text: formattedText, time: currentTime, isFormattedList: true }
     ]);
 
@@ -261,21 +273,19 @@ export default function App() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email / Username</label>
-                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="spd or admin_team_a" />
+                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="spd or admin" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>
                 <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="••••••••" />
               </div>
-              
               <div>
                 <label className="block text-xs font-semibold uppercase text-indigo-400 mb-1 flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> SPD Passcode (Use 'SPD2026' for SPD Access)
+                  <Lock className="w-3 h-3" /> SPD Passcode ('SPD2026')
                 </label>
                 <input type="password" value={adminCode} onChange={(e) => setAdminCode(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-indigo-500/30 rounded-xl text-white text-sm outline-none" placeholder="Leave blank for Team Admin" />
               </div>
-
-              <button type="submit" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 font-semibold rounded-xl text-sm flex items-center justify-center gap-2"><LogIn className="w-4 h-4" /> {t.signIn}</button>
+              <button type="submit" className="w-full py-3.5 bg-indigo-600 font-semibold rounded-xl text-sm flex items-center justify-center gap-2"><LogIn className="w-4 h-4" /> {t.signIn}</button>
               <div className="text-center text-sm"><span className="text-slate-400">Don't have an account? </span><button type="button" onClick={() => setAuthMode('signup')} className="text-indigo-400 font-semibold">{t.signUp}</button></div>
             </form>
           )}
@@ -319,7 +329,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile App Navigation Tab Bar */}
+        {/* Mobile Navigation Tab Bar */}
         <div className="bg-slate-900/90 border-t border-slate-800 flex justify-around py-2 overflow-x-auto">
           <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center text-[10px] min-w-[60px] ${activeTab === 'dashboard' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
             <LayoutDashboard className="w-4 h-4 mb-0.5" /> {t.dashboard}
@@ -335,7 +345,7 @@ export default function App() {
           </button>
           {currentUser.role === 'spd' && (
             <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center text-[10px] min-w-[60px] ${activeTab === 'admin' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
-              <Building2 className="w-4 h-4 mb-0.5" /> SPD Control
+              <Building2 className="w-4 h-4 mb-0.5" /> {t.spdControl}
             </button>
           )}
         </div>
@@ -352,9 +362,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* TEAM ADMIN DYNAMIC SHIFT ROSTER & MESSENGER LIST GENERATOR */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[520px]">
-              {/* Header */}
+            {/* CHAT ROSTER GENERATOR WITH TEXTAREA & CUSTOM DATE/TIME */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[540px]">
               <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <Bot className="w-4 h-4 text-indigo-400" />
@@ -365,7 +374,7 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Chat Output Area */}
+              {/* Chat Messages */}
               <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-950/40">
                 {chatMessages.map((msg, i) => (
                   <div key={i} className={`flex gap-2 ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}>
@@ -391,44 +400,42 @@ export default function App() {
                 ))}
               </div>
 
-              {/* Shift Controls Panel */}
+              {/* Shift Controls Panel with Translated Labels & Textarea */}
               <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-1.5 rounded-xl">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Shift:</span>
+                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.shiftLabel}:</span>
                     <select 
                       value={selectedShiftType} 
                       onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
-                      className="bg-transparent text-xs font-bold text-indigo-400 outline-none w-full"
+                      className="bg-transparent text-xs font-bold text-indigo-400 outline-none w-full cursor-pointer"
                     >
-                      <option value="Day" className="bg-slate-900">Day Shift</option>
-                      <option value="Night" className="bg-slate-900">Night Shift</option>
+                      <option value="Day" className="bg-slate-900">{t.dayShift}</option>
+                      <option value="Night" className="bg-slate-900">{t.nightShift}</option>
                     </select>
                   </div>
 
-                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 px-2 py-1.5 rounded-xl">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Time:</span>
+                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.dateTimeLabel}:</span>
                     <input 
                       type="text" 
-                      value={shiftTimeInput} 
-                      onChange={(e) => setShiftTimeInput(e.target.value)} 
-                      placeholder="e.g. 08:00 AM" 
+                      value={customDateTime} 
+                      onChange={(e) => setCustomDateTime(e.target.value)} 
                       className="bg-transparent text-xs font-bold text-emerald-400 outline-none w-full"
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
+                <div className="flex gap-2 items-end">
+                  <textarea 
                     value={inputMessage} 
                     onChange={(e) => setInputMessage(e.target.value)} 
-                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateShiftList()} 
-                    placeholder="Enter Staff IDs (e.g. PPS50 PPS61 PPS69)..." 
-                    className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none" 
+                    placeholder={t.checkInPrompt} 
+                    rows={2}
+                    className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none resize-none" 
                   />
-                  <button onClick={handleGenerateShiftList} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white rounded-xl flex items-center gap-1.5">
-                    <Send className="w-3.5 h-3.5" /> Generate List
+                  <button onClick={handleGenerateShiftList} className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white rounded-xl flex items-center gap-1.5 h-auto">
+                    <Send className="w-3.5 h-3.5" /> {t.checkInBtn}
                   </button>
                 </div>
               </div>
@@ -443,7 +450,7 @@ export default function App() {
               {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
                 <div key={day} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
                   <span className="font-bold text-indigo-400">{day}</span>
-                  <span className="text-slate-300">Flexible Shifts (Day/Night)</span>
+                  <span className="text-slate-300">Custom Shift Roster</span>
                 </div>
               ))}
             </div>
@@ -467,19 +474,16 @@ export default function App() {
           </div>
         )}
 
-        {/* WORK DAYS & OT TABLE PAGE */}
         {activeTab === 'attendance' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
             <div>
               <h2 className="text-base font-bold text-white">Payroll — Work days / OT · PPS RBR GW</h2>
               <p className="text-xs text-slate-400 mt-0.5">2026-09-20 → 2026-10-20 · {staffList.filter(s => s.status === 'Active').length} active people</p>
             </div>
-
             <div className="flex flex-wrap gap-2 pt-2">
               <button className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs flex items-center gap-1 text-slate-300"><Download className="w-3.5 h-3.5" /> Download PDF</button>
               <button className="px-3 py-2 bg-indigo-600 rounded-xl text-xs flex items-center gap-1 font-semibold text-white"><Printer className="w-3.5 h-3.5" /> Print / PDF (A4)</button>
             </div>
-
             <div className="overflow-x-auto border border-slate-800 rounded-xl mt-4">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
@@ -519,12 +523,11 @@ export default function App() {
           </div>
         )}
 
-        {/* SPD CONTROL PANEL PAGE */}
         {activeTab === 'admin' && currentUser.role === 'spd' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
             <div>
               <h3 className="font-bold text-sm text-indigo-400">👑 Service Provider (SPD) Master Control</h3>
-              <p className="text-xs text-slate-400 mt-1">Manage new staff entries, resignations, and assign staff to Team Admins.</p>
+              <p className="text-xs text-slate-400 mt-1">Manage new staff entries, resignations, and assign staff.</p>
             </div>
 
             <form onSubmit={handleAddStaff} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">

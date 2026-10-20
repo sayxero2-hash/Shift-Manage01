@@ -186,7 +186,7 @@ export default function App() {
       setStaffList([...staffList, newEntry]);
       setNewStaffId('');
       setNewStaffName('');
-      alert(`Staff ${newStaffName} (${newStaffId}) added and assigned to${newStaffTeam}`);
+      alert(`Staff ${newStaffName} (${newStaffId}) added and assigned to ${newStaffTeam}`);
     }
   };
 
@@ -201,7 +201,6 @@ export default function App() {
 
     let matchedStaff = staffList.filter(s => rawIds.includes(s.id.toUpperCase()) && s.status === 'Active');
 
-    // If no specific IDs entered, grab first N active staff as demo
     if (matchedStaff.length === 0 && staffList.length > 0) {
       matchedStaff = staffList.filter(s => s.status === 'Active').slice(0, 3);
     }
@@ -211,14 +210,14 @@ export default function App() {
     let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date: ${todayDate}\n⏰ Shift: ${selectedShiftType} Shift (${shiftTimeInput})\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
 
     matchedStaff.forEach((st, idx) => {
-      formattedText += `${idx + 1}. ${st.id} -${st.name}\n`;
+      formattedText += `${idx + 1}. ${st.id} - ${st.name}\n`;
     });
 
     formattedText += `------------------------------\n✅ Please arrive 10 mins before ${shiftTimeInput}. Have a good shift!`;
 
     setChatMessages(prev => [
       ...prev,
-      { sender: 'user', text: `Generated ${selectedShiftType} Shift (${shiftTimeInput}) for${matchedStaff.length} staff`, time: currentTime },
+      { sender: 'user', text: `Generated ${selectedShiftType} Shift (${shiftTimeInput}) for ${matchedStaff.length} staff`, time: currentTime },
       { sender: 'bot', text: formattedText, time: currentTime, isFormattedList: true }
     ]);
 
@@ -555,4 +554,24 @@ export default function App() {
                       <p className="text-[10px] text-slate-400">Assigned Team: {st.team}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] px-2 py-0.5 rounded
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${st.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                        {st.status}
+                      </span>
+                      <button 
+                        onClick={() => toggleStaffStatus(st.id)}
+                        className={`p-1.5 rounded-lg text-xs flex items-center gap-1 ${st.status === 'Active' ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600/30' : 'bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30'}`}
+                      >
+                        {st.status === 'Active' ? <UserMinus className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                        {st.status === 'Active' ? 'Mark Resigned' : 'Reactivate'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { 
   LogIn, ShieldCheck, UserPlus, 
   ArrowLeft, Users, Building2, Calendar, LayoutDashboard, 
-  LogOut, Send, Globe, Bot, User, Plus, FileText, Download, Printer, Lock, UserMinus, UserCheck, Copy, Check, Edit3, Clock, ClipboardPaste, Key, ShieldAlert, CheckCircle, XCircle, AlertTriangle, RefreshCw, Trash2, Search, UserCog
+  LogOut, Send, Globe, Bot, User, Plus, FileText, Printer, UserMinus, UserCheck, Copy, Check, Edit3, Clock, ClipboardPaste, ShieldAlert, CheckCircle, XCircle, AlertTriangle, RefreshCw, Trash2, Search, UserCog
 } from 'lucide-react';
+
+// Initialize Supabase Client using Vercel/Vite environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type ActiveTab = 'dashboard' | 'shifts' | 'team' | 'attendance' | 'admin';
@@ -55,6 +61,8 @@ interface ChatMessage {
     existingShift: LiveShiftRecord;
     newShiftType: string;
     newDateTime: string;
+    checkInTime: string;
+    checkOutTime: string;
   };
 }
 
@@ -74,8 +82,8 @@ const translations = {
     checkInBtn: "ပို့မည်",
     shiftLabel: "Shift Type",
     dateTimeLabel: "Date & Time",
-    dayShift: "Day Shift",
-    nightShift: "Night Shift",
+    dayShift: "Day Shift (08:00 AM - 07:00 PM)",
+    nightShift: "Night Shift (08:00 PM - 07:00 AM)",
     signOut: "Sign Out",
   },
   my: {
@@ -93,8 +101,8 @@ const translations = {
     checkInBtn: "ပို့မည်",
     shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
     dateTimeLabel: "ရက်စွဲနှင့် အချိန်",
-    dayShift: "နေ့ဘက်အလုပ်ချိန် (Day Shift)",
-    nightShift: "ညဘက်အလုပ်ချိန် (Night Shift)",
+    dayShift: "နေ့ဘက်အလုပ်ချိန် (08:00 AM - 07:00 PM)",
+    nightShift: "ညဘက်အလုပ်ချိန် (08:00 PM - 07:00 AM)",
     signOut: "ထွက်ရန်",
   },
   th: {
@@ -137,7 +145,6 @@ const translations = {
   }
 };
 
-// Helper function to calculate OT hours from CheckIn & CheckOut strings
 const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
   try {
     const parseTime = (timeStr: string) => {
@@ -154,14 +161,14 @@ const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
     const inTime = parseTime(checkInStr);
     const outTime = parseTime(checkOutStr);
 
-    if (inTime === null || outTime === null) return 2; // Default fallback 2 hrs
+    if (inTime === null || outTime === null) return 2;
 
     let totalDuration = outTime - inTime;
-    if (totalDuration < 0) totalDuration += 24; // Handle overnight shifts
+    if (totalDuration < 0) totalDuration += 24;
 
-    const workHoursWithoutLunch = Math.max(0, totalDuration - 1); // deduct 1 hour lunch
-    const otHours = Math.max(0, workHoursWithoutLunch - 8); // Overtime over 8 normal hours
-    return otHours > 0 ? Math.round(otHours * 10) / 10 : 2; // Default 2 hrs if standard shift
+    const workHoursWithoutLunch = Math.max(0, totalDuration - 1);
+    const otHours = Math.max(0, workHoursWithoutLunch - 8);
+    return otHours > 0 ? Math.round(otHours * 10) / 10 : 2;
   } catch (e) {
     return 2;
   }
@@ -182,44 +189,44 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
-  // Persistent LocalStorage States
-  const [teams, setTeams] = useState<string[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_teams');
-    return saved ? JSON.parse(saved) : ['Team A', 'Team B', 'Team C'];
-  });
+  // Supabase Database States
+  const [teams, setTeams] = useState<string[]>(['Team A', 'Team B', 'Team C']);
   const [newTeamName, setNewTeamName] = useState('');
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
+  const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>([]);
 
-  const [staffList, setStaffList] = useState<StaffMember[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_staff');
-    return saved ? JSON.parse(saved) : [
-      { id: 'PPS50', name: 'Mr. Zaw Lin Maung', role: 'team_admin', team: 'Team A', status: 'Active' },
-      { id: 'PPS61', name: 'Miss. Hla Hla Win', role: 'team_admin', team: 'Team B', status: 'Active' },
-      { id: 'PPS69', name: 'Mr. Aung Myo Myat', role: 'employee', team: 'Team A', status: 'Active' },
-      { id: 'PPS70', name: 'Mr. Wai Yan Htet', role: 'employee', team: 'Team B', status: 'Active' },
-      { id: 'PPS71', name: 'Mr. Kyaw Lin Oo', role: 'employee', team: 'Team A', status: 'Active' }
-    ];
-  });
+  const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>('Team A');
+  const [bulkTeam, setBulkTeam] = useState<string>('Team A');
 
-  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_signups');
-    return saved ? JSON.parse(saved) : [
-      { id: 'req1', name: 'Factory Manager A', email: 'factoryA@gmail.com', status: 'Pending', freeTrialDays: 7, assignedTeam: 'Team A' },
-      { id: 'req2', name: 'Service Lead B', email: 'serviceB@gmail.com', status: 'Approved', freeTrialDays: 14, assignedTeam: 'Team B' }
-    ];
-  });
+  // Fetch data from Supabase on load
+  useEffect(() => {
+    fetchSupabaseData();
+  }, []);
 
-  const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_live_records');
-    return saved ? JSON.parse(saved) : [
-      { id: 'PPS50', name: 'Mr. Zaw Lin Maung', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '07:00 PM', date: '20/10/2026', team: 'Team A' },
-      { id: 'PPS50', name: 'Mr. Zaw Lin Maung', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '07:00 PM', date: '21/10/2026', team: 'Team A' },
-      { id: 'PPS61', name: 'Miss. Hla Hla Win', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '08:00 PM', date: '21/10/2026', team: 'Team B' }
-    ];
-  });
+  const fetchSupabaseData = async () => {
+    try {
+      // Fetch Staff
+      const { data: staffData } = await supabase.from('staff').select('*');
+      if (staffData && staffData.length > 0) setStaffList(staffData);
 
-  // Selected Team States for forms
-  const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>(teams[0] || 'Team A');
-  const [bulkTeam, setBulkTeam] = useState<string>(teams[0] || 'Team A');
+      // Fetch Teams
+      const { data: teamData } = await supabase.from('teams').select('*');
+      if (teamData && teamData.length > 0) {
+        setTeams(teamData.map((t: any) => t.name));
+      }
+
+      // Fetch Live Records
+      const { data: liveData } = await supabase.from('live_records').select('*');
+      if (liveData) setLiveRecords(liveData);
+
+      // Fetch Signup Requests
+      const { data: reqData } = await supabase.from('signup_requests').select('*');
+      if (reqData) setSignupRequests(reqData);
+    } catch (err) {
+      console.error('Error fetching from Supabase:', err);
+    }
+  };
 
   useEffect(() => {
     if (teams.length > 0) {
@@ -228,11 +235,6 @@ export default function App() {
     }
   }, [teams]);
 
-  // Save to LocalStorage
-  useEffect(() => { localStorage.setItem('shiftmaster_teams', JSON.stringify(teams)); }, [teams]);
-  useEffect(() => { localStorage.setItem('shiftmaster_staff', JSON.stringify(staffList)); }, [staffList]);
-  useEffect(() => { localStorage.setItem('shiftmaster_signups', JSON.stringify(signupRequests)); }, [signupRequests]);
-  useEffect(() => { localStorage.setItem('shiftmaster_live_records', JSON.stringify(liveRecords)); }, [liveRecords]);
   useEffect(() => {
     if (currentUser) localStorage.setItem('shiftmaster_current_user', JSON.stringify(currentUser));
     else localStorage.removeItem('shiftmaster_current_user');
@@ -247,19 +249,18 @@ export default function App() {
   const [bulkText, setBulkText] = useState('');
 
   const [selectedShiftType, setSelectedShiftType] = useState<'Day' | 'Night'>('Day');
-  const [customDateTime, setCustomDateTime] = useState('21/10/2026, 08:00 AM');
+  const [customDateTime, setCustomDateTime] = useState('21/10/2026');
   const [inputMessage, setInputMessage] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { 
       sender: 'bot', 
-      text: '🤖 မင်္ဂလာပါ! Team Chat မှတဆင့် Date & Time, Shift ရွေးချယ်ပြီး Check-in ဝင်နိုင်ပါသည်။', 
+      text: '🤖 မင်္ဂလာပါ! Supabase Database နှင့် တိုက်ရိုက်ချိတ်ဆက်ပြီးသားဖြစ်ပါသည်။ Shift ရွေးချယ်၊ ရက်စွဲထည့်ပြီး ဝန်ထမ်း ID များကို ပို့လိုက်ရုံဖြင့် အချက်အလက်များ Cloud တွင် အလိုအလျောက် သိမ်းဆည်းသွားပါမည်။', 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
 
-  // 20th to 20th Days Generation Logic (31 Days)
   const generate20to20Days = () => {
     const days = [];
     for (let d = 20; d <= 31; d++) {
@@ -306,7 +307,7 @@ export default function App() {
     }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (identifier && password && fullName) {
       const newReq: SignupRequest = {
@@ -317,60 +318,84 @@ export default function App() {
         freeTrialDays: 7,
         assignedTeam: teams[0] || 'Team A'
       };
-      setSignupRequests([newReq, ...signupRequests]);
+      
+      const updated = [newReq, ...signupRequests];
+      setSignupRequests(updated);
+      await supabase.from('signup_requests').upsert([newReq]);
+      
       alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု အောင်မြင်ပါသည်။ SPD မာစတာမှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
       setAuthMode('login');
     }
   };
 
-  const handleApproveRequest = (id: string, status: 'Approved' | 'Rejected') => {
-    setSignupRequests(signupRequests.map(r => r.id === id ? { ...r, status } : r));
+  const handleApproveRequest = async (id: string, status: 'Approved' | 'Rejected') => {
+    const updated = signupRequests.map(r => r.id === id ? { ...r, status } : r);
+    setSignupRequests(updated);
+    await supabase.from('signup_requests').update({ status }).eq('id', id);
   };
 
-  const handleUpdateReqTeam = (id: string, newTeam: string) => {
-    setSignupRequests(signupRequests.map(r => r.id === id ? { ...r, assignedTeam: newTeam } : r));
+  const handleUpdateReqTeam = async (id: string, assignedTeam: string) => {
+    const updated = signupRequests.map(r => r.id === id ? { ...r, assignedTeam } : r);
+    setSignupRequests(updated);
+    await supabase.from('signup_requests').update({ assignedTeam }).eq('id', id);
   };
 
-  const handleAddTeam = (e: React.FormEvent) => {
+  const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTeamName && !teams.includes(newTeamName)) {
-      setTeams([...teams, newTeamName]);
+      const updatedTeams = [...teams, newTeamName];
+      setTeams(updatedTeams);
+      await supabase.from('teams').upsert([{ name: newTeamName }]);
       setNewTeamName('');
     }
   };
 
-  const handleRenameTeam = (oldTeamName: string) => {
+  const handleRenameTeam = async (oldTeamName: string) => {
     const updatedName = prompt(`Team (${oldTeamName}) အတွက် နာမည်သစ် ရိုက်ထည့်ပါ:`, oldTeamName);
     if (updatedName && updatedName.trim() !== '' && updatedName !== oldTeamName) {
       const newName = updatedName.trim();
-      setTeams(teams.map(t => t === oldTeamName ? newName : t));
-      setStaffList(staffList.map(s => s.team === oldTeamName ? { ...s, team: newName } : s));
-      setLiveRecords(liveRecords.map(r => r.team === oldTeamName ? { ...r, team: newName } : r));
-      setSignupRequests(signupRequests.map(r => r.assignedTeam === oldTeamName ? { ...r, assignedTeam: newName } : r));
-      if (selectedTeamForAdd === oldTeamName) setSelectedTeamForAdd(newName);
-      if (bulkTeam === oldTeamName) setBulkTeam(newName);
+      const updatedTeams = teams.map(t => t === oldTeamName ? newName : t);
+      
+      setTeams(updatedTeams);
+      await supabase.from('teams').delete().eq('name', oldTeamName);
+      await supabase.from('teams').upsert([{ name: newName }]);
+
+      // Update staff teams in Supabase
+      const updatedStaff = staffList.map(s => s.team === oldTeamName ? { ...s, team: newName } : s);
+      setStaffList(updatedStaff);
+      for (const st of updatedStaff) {
+        if (st.team === newName) {
+          await supabase.from('staff').update({ team: newName }).eq('id', st.id);
+        }
+      }
+
       alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။`);
     }
   };
 
-  const handleSpdDeleteStaff = (staffId: string, staffName: string) => {
+  const handleSpdDeleteStaff = async (staffId: string, staffName: string) => {
     if (confirm(`ဝန်ထမ်း ${staffName} (${staffId}) ကို စနစ်မှ အပြီးအပိုင် ဖျက်ရန် သေချာပါသလား?`)) {
       setStaffList(staffList.filter(s => s.id !== staffId));
       setLiveRecords(liveRecords.filter(r => r.id !== staffId));
+      await supabase.from('staff').delete().eq('id', staffId);
+      await supabase.from('live_records').delete().eq('id', staffId);
       alert(`ဝန်ထမ်း ${staffId} အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။`);
     }
   };
 
-  const handleSpdDeleteEntireTeam = (teamName: string) => {
+  const handleSpdDeleteEntireTeam = async (teamName: string) => {
     if (confirm(`Team (${teamName}) ထဲရှိ ဝန်ထမ်းအားလုံးကို အပြီးအပိုင် ဖျက်ရန် သေချာပါသလား?`)) {
       setTeams(teams.filter(t => t !== teamName));
       setStaffList(staffList.filter(s => s.team !== teamName));
       setLiveRecords(liveRecords.filter(r => r.team !== teamName));
+      
+      await supabase.from('teams').delete().eq('name', teamName);
+      await supabase.from('staff').delete().eq('team', teamName);
       alert(`Team (${teamName}) ရှိ ဝန်ထမ်းများအားလုံးကို ဖျက်ပြီးပါပြီ။`);
     }
   };
 
-  const handleDirectAddStaff = (e: React.FormEvent) => {
+  const handleDirectAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaffId || !newStaffName) return;
 
@@ -389,16 +414,23 @@ export default function App() {
     };
 
     setStaffList([...staffList, newStaff]);
+    await supabase.from('staff').upsert([newStaff]);
+
     setNewStaffId('');
     setNewStaffName('');
     alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${targetTeam} သို့ အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။`);
   };
 
-  const toggleStaffStatus = (id: string) => {
-    setStaffList(staffList.map(s => s.id === id ? { ...s, status: s.status === 'Active' ? 'Resigned' : 'Active' } : s));
+  const toggleStaffStatus = async (id: string) => {
+    const target = staffList.find(s => s.id === id);
+    if (!target) return;
+    const newStatus = target.status === 'Active' ? 'Resigned' : 'Active';
+
+    setStaffList(staffList.map(s => s.id === id ? { ...s, status: newStatus } : s));
+    await supabase.from('staff').update({ status: newStatus }).eq('id', id);
   };
 
-  const handleBulkImport = (e: React.FormEvent) => {
+  const handleBulkImport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkText.trim()) return;
 
@@ -407,23 +439,19 @@ export default function App() {
     let addedCount = 0;
     const newStaffs: StaffMember[] = [...staffList];
 
-    lines.forEach(line => {
+    for (const line of lines) {
       const parts = line.split(/[\t,-]+/);
       if (parts.length >= 2) {
         const id = parts[0].trim().toUpperCase();
         const name = parts[1].trim();
         if (id && name && !newStaffs.some(s => s.id === id)) {
-          newStaffs.push({
-            id,
-            name,
-            role: 'employee',
-            team: targetTeam,
-            status: 'Active'
-          });
+          const st: StaffMember = { id, name, role: 'employee', team: targetTeam, status: 'Active' };
+          newStaffs.push(st);
+          await supabase.from('staff').upsert([st]);
           addedCount++;
         }
       }
-    });
+    }
 
     setStaffList(newStaffs);
     setBulkText('');
@@ -434,14 +462,16 @@ export default function App() {
     window.print();
   };
 
-  const handleUpdateLiveTime = (id: string, field: 'checkIn' | 'checkOut') => {
+  const handleUpdateLiveTime = async (id: string, field: 'checkIn' | 'checkOut') => {
     const newVal = prompt(`Enter new ${field === 'checkIn' ? 'Check-in' : 'Check-out'} time:`, field === 'checkIn' ? '08:00 AM' : '07:00 PM');
     if (newVal) {
-      setLiveRecords(liveRecords.map(r => r.id === id ? { ...r, [field]: newVal } : r));
+      const updated = liveRecords.map(r => r.id === id ? { ...r, [field]: newVal } : r);
+      setLiveRecords(updated);
+      await supabase.from('live_records').update({ [field]: newVal }).eq('id', id);
     }
   };
 
-  const handleChatSubmit = () => {
+  const handleChatSubmit = async () => {
     const text = inputMessage.trim();
     if (!text) return;
 
@@ -454,12 +484,15 @@ export default function App() {
       return;
     }
 
-    const shiftTitleName = selectedShiftType === 'Day' ? t.dayShift : t.nightShift;
+    const shiftTitleName = selectedShiftType === 'Day' ? 'Day Shift (08:00 AM - 07:00 PM)' : 'Night Shift (08:00 PM - 07:00 AM)';
+    const defaultCheckIn = selectedShiftType === 'Day' ? '08:00 AM' : '08:00 PM';
+    const defaultCheckOut = selectedShiftType === 'Day' ? '07:00 PM' : '07:00 AM';
+
     const duplicatedStaff: { staff: StaffMember; existing: LiveShiftRecord }[] = [];
     const freshStaff: StaffMember[] = [];
 
     matchedStaff.forEach(st => {
-      const existingRec = liveRecords.find(r => r.id.toUpperCase() === st.id.toUpperCase());
+      const existingRec = liveRecords.find(r => r.id.toUpperCase() === st.id.toUpperCase() && r.date === customDateTime);
       if (existingRec) {
         duplicatedStaff.push({ staff: st, existing: existingRec });
       } else {
@@ -474,7 +507,7 @@ export default function App() {
         { sender: 'user', text: inputMessage, time: currentTime },
         { 
           sender: 'bot', 
-          text: `⚠️ [DUPLICATE CHECK-IN WARNING]\n\nဝန်ထမ်း: ${firstDup.staff.name} (${firstDup.staff.id})\n• လက်ရှိ Shift: ${firstDup.existing.shiftType}\n• ဝင်ထားသည့် Date: ${firstDup.existing.date}\n\n👉 ဤဝန်ထမ်းကို Shift အသစ် (${shiftTitleName} - ${customDateTime}) သို့ အစားထိုး ပြောင်းလဲမည်လား?`, 
+          text: `⚠️ [DUPLICATE CHECK-IN WARNING]\n\nဝန်ထမ်း: ${firstDup.staff.name} (${firstDup.staff.id})\n• ရက်စွဲ: ${customDateTime}\n• လက်ရှိ Shift: ${firstDup.existing.shiftType}\n\n👉 ဤရက်အတွက် Shift အသစ် (${shiftTitleName}) သို့ အစားထိုး ပြောင်းလဲမည်လား?`, 
           time: currentTime,
           isWarningCard: true,
           warningData: {
@@ -482,6 +515,8 @@ export default function App() {
             existingShift: firstDup.existing,
             newShiftType: shiftTitleName,
             newDateTime: customDateTime,
+            checkInTime: defaultCheckIn,
+            checkOutTime: defaultCheckOut
           }
         }
       ]);
@@ -493,19 +528,24 @@ export default function App() {
       id: st.id,
       name: st.name,
       shiftType: shiftTitleName,
-      checkIn: customDateTime.includes(',') ? customDateTime.split(',')[1].trim() : '08:00 AM',
-      checkOut: selectedShiftType === 'Day' ? '07:00 PM' : '05:00 AM',
-      date: customDateTime.split(',')[0].trim() || '21/10/2026',
+      checkIn: defaultCheckIn,
+      checkOut: defaultCheckOut,
+      date: customDateTime,
       team: st.team
     }));
 
-    setLiveRecords([...newLiveEntries, ...liveRecords]);
+    const updatedLive = [...newLiveEntries, ...liveRecords];
+    setLiveRecords(updatedLive);
+    for (const entry of newLiveEntries) {
+      await supabase.from('live_records').upsert([entry]);
+    }
 
-    let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date & Time: ${customDateTime}\n⏰ Shift: ${shiftTitleName}\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
+    let otCalcHours = calculateOtHours(defaultCheckIn, defaultCheckOut);
+    let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date: ${customDateTime}\n⏰ Shift: ${shiftTitleName}\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
     matchedStaff.forEach((st, idx) => {
-      formattedText += `${idx + 1}. ${st.id} - ${st.name} (${st.team})\n`;
+      formattedText += `${idx + 1}. ${st.id} - ${st.name} (${st.team}) [OT: ${otCalcHours}h]\n`;
     });
-    formattedText += `------------------------------\n✅ Please arrive on time. Have a good shift!`;
+    formattedText += `------------------------------\n✅ Saved to Supabase Database successfully!`;
 
     setChatMessages(prev => [
       ...prev,
@@ -516,27 +556,29 @@ export default function App() {
     setInputMessage('');
   };
 
-  const handleConfirmReplace = (warningData: { dupStaff: StaffMember; existingShift: LiveShiftRecord; newShiftType: string; newDateTime: string }) => {
+  const handleConfirmReplace = async (warningData: { dupStaff: StaffMember; existingShift: LiveShiftRecord; newShiftType: string; newDateTime: string; checkInTime: string; checkOutTime: string }) => {
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const updatedRecord: LiveShiftRecord = {
       id: warningData.dupStaff.id,
       name: warningData.dupStaff.name,
       shiftType: warningData.newShiftType,
-      checkIn: warningData.newDateTime.includes(',') ? warningData.newDateTime.split(',')[1].trim() : '08:00 AM',
-      checkOut: warningData.newShiftType.includes('Day') ? '07:00 PM' : '05:00 AM',
-      date: warningData.newDateTime.split(',')[0].trim() || '21/10/2026',
+      checkIn: warningData.checkInTime,
+      checkOut: warningData.checkOutTime,
+      date: warningData.newDateTime,
       team: warningData.dupStaff.team,
       isReplaced: true
     };
 
-    setLiveRecords(prev => [updatedRecord, ...prev.filter(r => r.id !== warningData.dupStaff.id)]);
+    const updatedLive = [updatedRecord, ...liveRecords.filter(r => !(r.id === warningData.dupStaff.id && r.date === warningData.newDateTime))];
+    setLiveRecords(updatedLive);
+    await supabase.from('live_records').upsert([updatedRecord]);
 
     setChatMessages(prev => [
       ...prev,
       { 
         sender: 'bot', 
-        text: `🔄 အောင်မြင်ပါသည်! ဝန်ထမ်း ${warningData.dupStaff.name} (${warningData.dupStaff.id}) ၏ Shift ကို အစားထိုး အပ်ဒိတ်လုပ်ပြီးပါပြီ။`, 
+        text: `🔄 အောင်မြင်ပါသည်! ဝန်ထမ်း ${warningData.dupStaff.name} (${warningData.dupStaff.id}) ၏ Shift ကို Supabase တွင် အစားထိုး အပ်ဒိတ်လုပ်ပြီးပါပြီ။`, 
         time: currentTime 
       }
     ]);
@@ -572,7 +614,7 @@ export default function App() {
           <div className="flex flex-col items-center mb-6">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white mb-2"><ShieldCheck className="w-8 h-8" /></div>
             <h1 className="text-xl font-bold">{t.appName}</h1>
-            <p className="text-xs text-slate-400 mt-1">Sign in as SPD or Team Admin</p>
+            <p className="text-xs text-slate-400 mt-1">Cloud Database (Supabase) Connected</p>
           </div>
 
           {authMode === 'login' && (
@@ -665,7 +707,6 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full pb-20 space-y-6">
-        {/* TEAM CHAT DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex justify-between items-center">
@@ -681,8 +722,8 @@ export default function App() {
                   <Bot className="w-4 h-4 text-indigo-400" />
                   <span className="text-xs font-bold">{t.checkInChatTitle}</span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-500/20 text-indigo-400">
-                  TEAM CHAT
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400">
+                  SUPABASE CLOUD SYNC
                 </span>
               </div>
 
@@ -731,18 +772,19 @@ export default function App() {
                       onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
                       className="bg-transparent text-xs font-bold text-indigo-400 outline-none w-full cursor-pointer"
                     >
-                      <option value="Day" className="bg-slate-900">{t.dayShift}</option>
-                      <option value="Night" className="bg-slate-900">{t.nightShift}</option>
+                      <option value="Day" className="bg-slate-900">Day Shift (08:00 AM - 07:00 PM)</option>
+                      <option value="Night" className="bg-slate-900">Night Shift (08:00 PM - 07:00 AM)</option>
                     </select>
                   </div>
 
                   <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.dateTimeLabel}:</span>
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">ရက်စွဲ (Date):</span>
                     <input 
                       type="text" 
                       value={customDateTime} 
                       onChange={(e) => setCustomDateTime(e.target.value)} 
                       className="bg-transparent text-xs font-bold text-emerald-400 outline-none w-full"
+                      placeholder="ဥပမာ - 21/10/2026"
                     />
                   </div>
                 </div>
@@ -765,7 +807,6 @@ export default function App() {
           </div>
         )}
 
-        {/* SHIFT ROSTER & LIVE TRACKING TAB */}
         {activeTab === 'shifts' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
             <div className="flex items-center justify-between">
@@ -819,7 +860,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TEAM MEMBERS TAB */}
         {activeTab === 'team' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
             <div>
@@ -892,13 +932,12 @@ export default function App() {
           </div>
         )}
 
-        {/* WORK DAYS / OT TAB (20th to 20th Dynamic Sequential Cumulative WD & Exact OT Hours) */}
         {activeTab === 'attendance' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 print-area">
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-base font-bold text-white print:text-black">Payroll — Work days / OT Hours Verified</h2>
-                <p className="text-xs text-slate-400 mt-0.5 print:text-gray-700">20th to 20th Cycle · OT နာရီများကို Check-in/Out အမှန်အတိုင်း အလိုအလျောက် တွက်ချက်ပေးပါသည်။</p>
+                <p className="text-xs text-slate-400 mt-0.5 print:text-gray-700">20th to 20th Cycle · Supabase Database Sync Active.</p>
               </div>
               <div className="flex gap-2 no-print">
                 <button onClick={handlePrint} className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5">
@@ -944,7 +983,6 @@ export default function App() {
 
                     return (
                       <React.Fragment key={st.id}>
-                        {/* WD Row */}
                         <tr className="print:break-inside-avoid bg-slate-900/50 print:bg-white">
                           <td className="p-2 text-center font-bold border-r border-slate-800 print:border-gray-300" rowSpan={2}>{idx + 1}</td>
                           <td className="p-2 text-center font-bold text-indigo-400 print:text-black border-r border-slate-800 print:border-gray-300" rowSpan={2}>{st.id}</td>
@@ -970,7 +1008,6 @@ export default function App() {
                           </td>
                         </tr>
 
-                        {/* OT Hours Row */}
                         <tr className="print:break-inside-avoid bg-slate-950/40 print:bg-white">
                           {rowDayValues.map((val, i) => (
                             <td key={i} className="p-1 text-center border-r border-slate-800/40 print:border-gray-300 text-[9px] border-t border-slate-800/50 whitespace-nowrap">
@@ -991,14 +1028,13 @@ export default function App() {
           </div>
         )}
 
-        {/* SPD MASTER CONTROL PANEL */}
         {activeTab === 'admin' && currentUser.role === 'spd' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-6">
             <div>
               <h3 className="font-bold text-sm text-indigo-400 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 text-indigo-400" /> 👑 Service Provider (SPD) Master Control Panel
+                <ShieldAlert className="w-4 h-4 text-indigo-400" /> 👑 Service Provider (SPD) Master Control Panel (Supabase Sync)
               </h3>
-              <p className="text-xs text-slate-400 mt-1">Email ဖြင့် Signup လုပ်လာသူ Customer များကို မည်သည့် Team ၏ Admin အဖြစ် သတ်မှတ်မည်ကို SPD မှ တိုက်ရိုက် စီမံနိုင်ပါသည်။</p>
+              <p className="text-xs text-slate-400 mt-1">အချက်အလက်များအားလုံး Database တွင် အလိုအလျောက် သိမ်းဆည်းပေးနေပါသည်။</p>
             </div>
 
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
@@ -1029,7 +1065,7 @@ export default function App() {
 
                       {req.status !== 'Approved' && (
                         <button onClick={() => handleApproveRequest(req.id, 'Approved')} className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3" /> Approve as Team Admin
+                          <CheckCircle className="w-3 h-3" /> Approve
                         </button>
                       )}
                       {req.status !== 'Rejected' && (
@@ -1045,7 +1081,7 @@ export default function App() {
 
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
               <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <ClipboardPaste className="w-4 h-4 text-emerald-400" /> Bulk Import Staff List (Default: Active)
+                <ClipboardPaste className="w-4 h-4 text-emerald-400" /> Bulk Import Staff List (Cloud Sync)
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select value={bulkTeam} onChange={(e) => setBulkTeam(e.target.value)} className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none">

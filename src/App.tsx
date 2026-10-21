@@ -78,11 +78,9 @@ const translations = {
     welcome: "Welcome back",
     checkInChatTitle: "Team Chat Assistant",
     checkInPrompt: "Type Staff IDs (e.g. PPS50, PPS61)...",
-    checkInBtn: "ပို့မည်",
+    checkInBtn: "Send",
     shiftLabel: "Shift Type",
     dateTimeLabel: "Date & Time",
-    dayShift: "Day Shift (08:00 AM - 07:00 PM)",
-    nightShift: "Night Shift (08:00 PM - 07:00 AM)",
     signOut: "Sign Out",
   },
   my: {
@@ -100,8 +98,6 @@ const translations = {
     checkInBtn: "ပို့မည်",
     shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
     dateTimeLabel: "ရက်စွဲနှင့် အချိန်",
-    dayShift: "နေ့ဘက်အလုပ်ချိန် (08:00 AM - 07:00 PM)",
-    nightShift: "ညဘက်အလုပ်ချိန် (08:00 PM - 07:00 AM)",
     signOut: "ထွက်ရန်",
   },
   th: {
@@ -119,8 +115,6 @@ const translations = {
     checkInBtn: "ส่ง",
     shiftLabel: "ประเภทกะงาน",
     dateTimeLabel: "วันที่และเวลา",
-    dayShift: "กะกลางวัน",
-    nightShift: "กะกลางคืน",
     signOut: "ออกจากระบบ",
   },
   zh: {
@@ -138,8 +132,6 @@ const translations = {
     checkInBtn: "发送",
     shiftLabel: "班次类型",
     dateTimeLabel: "日期与时间",
-    dayShift: "白班",
-    nightShift: "夜班",
     signOut: "登出",
   }
 };
@@ -188,50 +180,29 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
-  const [teams, setTeams] = useState<string[]>(['Team A', 'Team B', 'Team C']);
+  const [teams, setTeams] = useState<string[]>(() => {
+    const saved = localStorage.getItem('shiftmaster_teams');
+    return saved ? JSON.parse(saved) : ['Team A', 'Team B', 'Team C'];
+  });
   const [newTeamName, setNewTeamName] = useState('');
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
-  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
-  const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>([]);
+
+  const [staffList, setStaffList] = useState<StaffMember[]>(() => {
+    const saved = localStorage.getItem('shiftmaster_staff');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>(() => {
+    const saved = localStorage.getItem('shiftmaster_requests');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>(() => {
+    const saved = localStorage.getItem('shiftmaster_live');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>('Team A');
   const [bulkTeam, setBulkTeam] = useState<string>('Team A');
-
-  useEffect(() => {
-    fetchSupabaseData();
-  }, []);
-
-  const fetchSupabaseData = async () => {
-    try {
-      const { data: staffData } = await supabase.from('staff').select('*');
-      if (staffData && staffData.length > 0) setStaffList(staffData);
-
-      const { data: teamData } = await supabase.from('teams').select('*');
-      if (teamData && teamData.length > 0) {
-        setTeams(teamData.map((t: any) => t.name));
-      }
-
-      const { data: liveData } = await supabase.from('live_records').select('*');
-      if (liveData) setLiveRecords(liveData);
-
-      const { data: reqData } = await supabase.from('signup_requests').select('*');
-      if (reqData) setSignupRequests(reqData);
-    } catch (err) {
-      console.error('Error fetching from Supabase:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (teams.length > 0) {
-      if (!teams.includes(selectedTeamForAdd)) setSelectedTeamForAdd(teams[0]);
-      if (!teams.includes(bulkTeam)) setBulkTeam(teams[0]);
-    }
-  }, [teams]);
-
-  useEffect(() => {
-    if (currentUser) localStorage.setItem('shiftmaster_current_user', JSON.stringify(currentUser));
-    else localStorage.removeItem('shiftmaster_current_user');
-  }, [currentUser]);
 
   const [newStaffId, setNewStaffId] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
@@ -249,10 +220,73 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { 
       sender: 'bot', 
-      text: '🤖 မင်္ဂလာပါ! Supabase Auth စနစ်ဖြင့် အပြည့်အဝ ချိတ်ဆက်ပြီးသားဖြစ်ပါသည်။', 
+      text: '🤖 မင်္ဂလာပါ! Supabase Cloud Database နှင့် အပြည့်အဝ ချိတ်ဆက်ပြီးသားဖြစ်ပါသည်။', 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
+
+  useEffect(() => {
+    fetchSupabaseData();
+  }, []);
+
+  const fetchSupabaseData = async () => {
+    try {
+      const { data: staffData } = await supabase.from('staff').select('*');
+      if (staffData && staffData.length > 0) {
+        setStaffList(staffData);
+        localStorage.setItem('shiftmaster_staff', JSON.stringify(staffData));
+      }
+
+      const { data: teamData } = await supabase.from('teams').select('*');
+      if (teamData && teamData.length > 0) {
+        const tNames = teamData.map((t: any) => t.name);
+        setTeams(tNames);
+        localStorage.setItem('shiftmaster_teams', JSON.stringify(tNames));
+      }
+
+      const { data: liveData } = await supabase.from('live_records').select('*');
+      if (liveData) {
+        setLiveRecords(liveData);
+        localStorage.setItem('shiftmaster_live', JSON.stringify(liveData));
+      }
+
+      const { data: reqData } = await supabase.from('signup_requests').select('*');
+      if (reqData) {
+        setSignupRequests(reqData);
+        localStorage.setItem('shiftmaster_requests', JSON.stringify(reqData));
+      }
+    } catch (err) {
+      console.error('Error fetching from Supabase:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (teams.length > 0) {
+      if (!teams.includes(selectedTeamForAdd)) setSelectedTeamForAdd(teams[0]);
+      if (!teams.includes(bulkTeam)) setBulkTeam(teams[0]);
+    }
+  }, [teams]);
+
+  useEffect(() => {
+    if (currentUser) localStorage.setItem('shiftmaster_current_user', JSON.stringify(currentUser));
+    else localStorage.removeItem('shiftmaster_current_user');
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('shiftmaster_staff', JSON.stringify(staffList));
+  }, [staffList]);
+
+  useEffect(() => {
+    localStorage.setItem('shiftmaster_teams', JSON.stringify(teams));
+  }, [teams]);
+
+  useEffect(() => {
+    localStorage.setItem('shiftmaster_live', JSON.stringify(liveRecords));
+  }, [liveRecords]);
+
+  useEffect(() => {
+    localStorage.setItem('shiftmaster_requests', JSON.stringify(signupRequests));
+  }, [signupRequests]);
 
   const generate20to20Days = () => {
     const days = [];
@@ -288,7 +322,7 @@ export default function App() {
     });
 
     if (error) {
-      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ (Email သို့မဟုတ် Password စစ်ဆေးပါ): ' + error.message);
+      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ: ' + error.message);
       return;
     }
 
@@ -388,12 +422,12 @@ export default function App() {
         }
       }
 
-      alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။`);
+      alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ ပြောင်းလဲပြီးပါပြီ။`);
     }
   };
 
   const handleSpdDeleteStaff = async (staffId: string, staffName: string) => {
-    if (confirm(`ဝန်ထမ်း ${staffName} (${staffId}) ကို စနစ်မှ အပြီးအပိုင် ဖျက်ရန် သေချာပါသလား?`)) {
+    if (confirm(`ဝန်ထမ်း ${staffName} (${staffId}) ကို ဖျက်ရန် သေချာပါသလား?`)) {
       setStaffList(staffList.filter(s => s.id !== staffId));
       setLiveRecords(liveRecords.filter(r => r.id !== staffId));
       await supabase.from('staff').delete().eq('id', staffId);
@@ -403,14 +437,14 @@ export default function App() {
   };
 
   const handleSpdDeleteEntireTeam = async (teamName: string) => {
-    if (confirm(`Team (${teamName}) ထဲရှိ ဝန်ထမ်းအားလုံးကို အပြီးအပိုင် ဖျက်ရန် သေချာပါသလား?`)) {
+    if (confirm(`Team (${teamName}) ရှိ ဝန်ထမ်းအားလုံးကို ဖျက်ရန် သေချာပါသလား?`)) {
       setTeams(teams.filter(t => t !== teamName));
       setStaffList(staffList.filter(s => s.team !== teamName));
       setLiveRecords(liveRecords.filter(r => r.team !== teamName));
       
       await supabase.from('teams').delete().eq('name', teamName);
       await supabase.from('staff').delete().eq('team', teamName);
-      alert(`Team (${teamName}) ရှိ ဝန်ထမ်းများအားလုံးကို ဖျက်ပြီးပါပြီ။`);
+      alert(`Team (${teamName}) ကို ဖျက်ပြီးပါပြီ။`);
     }
   };
 
@@ -419,7 +453,7 @@ export default function App() {
     if (!newStaffId || !newStaffName) return;
 
     if (staffList.some(s => s.id.toUpperCase() === newStaffId.toUpperCase())) {
-      alert('ဤ Staff ID မှာ စနစ်ထဲတွင် ရှိပြီးသားဖြစ်ပါသည်။');
+      alert('ဤ Staff ID မှာ ရှိပြီးသားဖြစ်ပါသည်။');
       return;
     }
 
@@ -437,7 +471,7 @@ export default function App() {
 
     setNewStaffId('');
     setNewStaffName('');
-    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${targetTeam} သို့ အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။`);
+    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${targetTeam} သို့ ထည့်သွင်းပြီးပါပြီ။`);
   };
 
   const toggleStaffStatus = async (id: string) => {
@@ -474,7 +508,7 @@ export default function App() {
 
     setStaffList(newStaffs);
     setBulkText('');
-    alert(`Successfully imported ${addedCount} staff members as Active into ${targetTeam}!`);
+    alert(`Successfully imported ${addedCount} staff members into ${targetTeam}!`);
   };
 
   const handlePrint = () => {

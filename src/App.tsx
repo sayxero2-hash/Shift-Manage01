@@ -6,7 +6,6 @@ import {
   LogOut, Send, Globe, Bot, User, Plus, FileText, Printer, UserMinus, UserCheck, Copy, Check, Edit3, Clock, ClipboardPaste, ShieldAlert, CheckCircle, XCircle, AlertTriangle, RefreshCw, Trash2, Search, UserCog
 } from 'lucide-react';
 
-// Initialize Supabase Client using Vercel/Vite environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -189,7 +188,6 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
-  // Supabase Database States
   const [teams, setTeams] = useState<string[]>(['Team A', 'Team B', 'Team C']);
   const [newTeamName, setNewTeamName] = useState('');
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -199,28 +197,23 @@ export default function App() {
   const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>('Team A');
   const [bulkTeam, setBulkTeam] = useState<string>('Team A');
 
-  // Fetch data from Supabase on load
   useEffect(() => {
     fetchSupabaseData();
   }, []);
 
   const fetchSupabaseData = async () => {
     try {
-      // Fetch Staff
       const { data: staffData } = await supabase.from('staff').select('*');
       if (staffData && staffData.length > 0) setStaffList(staffData);
 
-      // Fetch Teams
       const { data: teamData } = await supabase.from('teams').select('*');
       if (teamData && teamData.length > 0) {
         setTeams(teamData.map((t: any) => t.name));
       }
 
-      // Fetch Live Records
       const { data: liveData } = await supabase.from('live_records').select('*');
       if (liveData) setLiveRecords(liveData);
 
-      // Fetch Signup Requests
       const { data: reqData } = await supabase.from('signup_requests').select('*');
       if (reqData) setSignupRequests(reqData);
     } catch (err) {
@@ -360,7 +353,6 @@ export default function App() {
       await supabase.from('teams').delete().eq('name', oldTeamName);
       await supabase.from('teams').upsert([{ name: newName }]);
 
-      // Update staff teams in Supabase
       const updatedStaff = staffList.map(s => s.team === oldTeamName ? { ...s, team: newName } : s);
       setStaffList(updatedStaff);
       for (const st of updatedStaff) {
@@ -620,8 +612,8 @@ export default function App() {
           {authMode === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email / Staff ID</label>
-                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="sayxero2@gmail.com or PPS50" />
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email or Phone No</label>
+                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="example@gmail.com or 09xxxxxxxxx" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>
@@ -639,8 +631,8 @@ export default function App() {
                 <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="John Doe" />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email or Phone</label>
-                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="name@company.com" />
+                <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email or Phone No</label>
+                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="example@gmail.com or 09xxxxxxxxx" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>

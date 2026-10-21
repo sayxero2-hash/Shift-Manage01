@@ -174,31 +174,51 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const savedUser = localStorage.getItem('shiftmaster_current_user');
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem('shiftmaster_current_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
   });
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
   const [teams, setTeams] = useState<string[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_teams');
-    return saved ? JSON.parse(saved) : ['Team A', 'Team B', 'Team C'];
+    try {
+      const saved = localStorage.getItem('shiftmaster_teams');
+      return saved ? JSON.parse(saved) : ['Team A', 'Team B', 'Team C'];
+    } catch {
+      return ['Team A', 'Team B', 'Team C'];
+    }
   });
   const [newTeamName, setNewTeamName] = useState('');
 
   const [staffList, setStaffList] = useState<StaffMember[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_staff');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('shiftmaster_staff');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [signupRequests, setSignupRequests] = useState<SignupRequest[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_requests');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('shiftmaster_requests');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>(() => {
-    const saved = localStorage.getItem('shiftmaster_live');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('shiftmaster_live');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>('Team A');

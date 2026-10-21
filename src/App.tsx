@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './utils/supabase';
+import { translations, calculateOtHours, Language } from './locales/translations';
 import { 
-  LogIn, ShieldCheck, UserPlus, 
-  ArrowLeft, Users, Building2, Calendar, LayoutDashboard, 
-  LogOut, Send, Globe, Bot, User, Plus, FileText, Printer, UserMinus, UserCheck, Copy, Check, Edit3, Clock, ClipboardPaste, ShieldAlert, CheckCircle, XCircle, AlertTriangle, RefreshCw, Trash2, Search, UserCog
+  LogIn, ShieldCheck, UserPlus, ArrowLeft, Users, Building2, Calendar, 
+  LayoutDashboard, LogOut, Send, Globe, Bot, User, Plus, FileText, 
+  Printer, UserMinus, UserCheck, Copy, Check, Edit3, Clock, 
+  ClipboardPaste, ShieldAlert, CheckCircle, XCircle, AlertTriangle, 
+  RefreshCw, Trash2, Search, UserCog
 } from 'lucide-react';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type ActiveTab = 'dashboard' | 'shifts' | 'team' | 'attendance' | 'admin';
-type Language = 'en' | 'my' | 'th' | 'zh';
 
 interface StaffMember {
   id: string;
@@ -65,106 +63,6 @@ interface ChatMessage {
   };
 }
 
-const translations = {
-  en: {
-    appName: "ShiftMaster HR",
-    signIn: "Sign In",
-    signUp: "Sign Up",
-    dashboard: "Team Chat & Dashboard",
-    shiftRoster: "Shift Roster & Live",
-    teamMembers: "Team Members",
-    workDaysOT: "Work Days / OT",
-    spdControl: "SPD Master Control",
-    welcome: "Welcome back",
-    checkInChatTitle: "Team Chat Assistant",
-    checkInPrompt: "Type Staff IDs (e.g. PPS50, PPS61)...",
-    checkInBtn: "Send",
-    shiftLabel: "Shift Type",
-    dateTimeLabel: "Date & Time",
-    signOut: "Sign Out",
-  },
-  my: {
-    appName: "ShiftMaster HR",
-    signIn: "အကောင့်ဝင်ရန်",
-    signUp: "အကောင့်အသစ်ဖွင့်ရန်",
-    dashboard: "Team Chat နှင့် ဒက်ရှ်ဘုတ်",
-    shiftRoster: "အလုပ်ချိန်ဇယားနှင့် Live",
-    teamMembers: "အဖွဲ့ဝင်များ",
-    workDaysOT: "အလုပ်ရက် / အိုတီ (WD/OT)",
-    spdControl: "SPD မာစတာ ထိန်းချုပ်ရန်",
-    welcome: "ပြန်လည်ကြိုဆိုပါတယ်",
-    checkInChatTitle: "Team Chat လက်ထောက်",
-    checkInPrompt: "ဝန်ထမ်း ID များ ရိုက်ထည့်ပါ (ဥပမာ- PPS50, PPS61)...",
-    checkInBtn: "ပို့မည်",
-    shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
-    dateTimeLabel: "ရက်စွဲနှင့် အချိန်",
-    signOut: "ထွက်ရန်",
-  },
-  th: {
-    appName: "ShiftMaster HR",
-    signIn: "เข้าสู่ระบบ",
-    signUp: "สมัครสมาชิก",
-    dashboard: "แชททีม & แดชบอร์ด",
-    shiftRoster: "ตารางกะ & สด",
-    teamMembers: "สมาชิกในทีม",
-    workDaysOT: "วันทำงาน / OT",
-    spdControl: "การควบคุม SPD",
-    welcome: "ยินดีต้อนรับกลับมา",
-    checkInChatTitle: "ผู้ช่วยแชททีม",
-    checkInPrompt: "พิมพ์รหัสพนักงาน...",
-    checkInBtn: "ส่ง",
-    shiftLabel: "ประเภทกะงาน",
-    dateTimeLabel: "วันที่และเวลา",
-    signOut: "ออกจากระบบ",
-  },
-  zh: {
-    appName: "ShiftMaster HR",
-    signIn: "登录",
-    signUp: "注册",
-    dashboard: "团队聊天与仪表盘",
-    shiftRoster: "排班表与实时",
-    teamMembers: "团队成员",
-    workDaysOT: "工作日 / 加班",
-    spdControl: "SPD 控制面板",
-    welcome: "欢迎回来",
-    checkInChatTitle: "团队聊天助手",
-    checkInPrompt: "输入员工ID...",
-    checkInBtn: "发送",
-    shiftLabel: "班次类型",
-    dateTimeLabel: "日期与时间",
-    signOut: "登出",
-  }
-};
-
-const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
-  try {
-    const parseTime = (timeStr: string) => {
-      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!match) return null;
-      let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const ampm = match[3].toUpperCase();
-      if (ampm === 'PM' && hours < 12) hours += 12;
-      if (ampm === 'AM' && hours === 12) hours = 0;
-      return hours + minutes / 60;
-    };
-
-    const inTime = parseTime(checkInStr);
-    const outTime = parseTime(checkOutStr);
-
-    if (inTime === null || outTime === null) return 2;
-
-    let totalDuration = outTime - inTime;
-    if (totalDuration < 0) totalDuration += 24;
-
-    const workHoursWithoutLunch = Math.max(0, totalDuration - 1);
-    const otHours = Math.max(0, workHoursWithoutLunch - 8);
-    return otHours > 0 ? Math.round(otHours * 10) / 10 : 2;
-  } catch (e) {
-    return 2;
-  }
-};
-
 export default function App() {
   const [lang, setLang] = useState<Language>('my');
   const t = translations[lang];
@@ -173,53 +71,19 @@ export default function App() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    try {
-      const savedUser = localStorage.getItem('shiftmaster_current_user');
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch {
-      return null;
-    }
-  });
+  
+  // Loading & Session States to prevent Blur/Blank Screen
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
-  const [teams, setTeams] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('shiftmaster_teams');
-      return saved ? JSON.parse(saved) : ['Team A', 'Team B', 'Team C'];
-    } catch {
-      return ['Team A', 'Team B', 'Team C'];
-    }
-  });
+  const [teams, setTeams] = useState<string[]>(['Team A', 'Team B', 'Team C']);
   const [newTeamName, setNewTeamName] = useState('');
 
-  const [staffList, setStaffList] = useState<StaffMember[]>(() => {
-    try {
-      const saved = localStorage.getItem('shiftmaster_staff');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>(() => {
-    try {
-      const saved = localStorage.getItem('shiftmaster_requests');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('shiftmaster_live');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [signupRequests, setSignupRequests] = useState<SignupRequest[]>([]);
+  const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>([]);
 
   const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>('Team A');
   const [bulkTeam, setBulkTeam] = useState<string>('Team A');
@@ -245,40 +109,39 @@ export default function App() {
     }
   ]);
 
+  // Safe Session Check & Data Fetching on Load
   useEffect(() => {
-    fetchSupabaseData();
+    const initializeApp = async () => {
+      try {
+        const savedUser = localStorage.getItem('shiftmaster_current_user');
+        if (savedUser) {
+          setCurrentUser(JSON.parse(savedUser));
+        }
+
+        // Fetch Data from Supabase safely
+        const { data: staffData } = await supabase.from('staff').select('*');
+        if (staffData && staffData.length > 0) setStaffList(staffData);
+
+        const { data: teamData } = await supabase.from('teams').select('*');
+        if (teamData && teamData.length > 0) {
+          setTeams(teamData.map((t: any) => t.name));
+        }
+
+        const { data: liveData } = await supabase.from('live_records').select('*');
+        if (liveData) setLiveRecords(liveData);
+
+        const { data: reqData } = await supabase.from('signup_requests').select('*');
+        if (reqData) setSignupRequests(reqData);
+
+      } catch (err) {
+        console.error('Initialization error:', err);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeApp();
   }, []);
-
-  const fetchSupabaseData = async () => {
-    try {
-      const { data: staffData } = await supabase.from('staff').select('*');
-      if (staffData && staffData.length > 0) {
-        setStaffList(staffData);
-        localStorage.setItem('shiftmaster_staff', JSON.stringify(staffData));
-      }
-
-      const { data: teamData } = await supabase.from('teams').select('*');
-      if (teamData && teamData.length > 0) {
-        const tNames = teamData.map((t: any) => t.name);
-        setTeams(tNames);
-        localStorage.setItem('shiftmaster_teams', JSON.stringify(tNames));
-      }
-
-      const { data: liveData } = await supabase.from('live_records').select('*');
-      if (liveData) {
-        setLiveRecords(liveData);
-        localStorage.setItem('shiftmaster_live', JSON.stringify(liveData));
-      }
-
-      const { data: reqData } = await supabase.from('signup_requests').select('*');
-      if (reqData) {
-        setSignupRequests(reqData);
-        localStorage.setItem('shiftmaster_requests', JSON.stringify(reqData));
-      }
-    } catch (err) {
-      console.error('Error fetching from Supabase:', err);
-    }
-  };
 
   useEffect(() => {
     if (teams.length > 0) {
@@ -290,24 +153,10 @@ export default function App() {
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('shiftmaster_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('shiftmaster_current_user');
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_staff', JSON.stringify(staffList));
-  }, [staffList]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_teams', JSON.stringify(teams));
-  }, [teams]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_live', JSON.stringify(liveRecords));
-  }, [liveRecords]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_requests', JSON.stringify(signupRequests));
-  }, [signupRequests]);
 
   const generate20to20Days = () => {
     const days = [];
@@ -328,12 +177,13 @@ export default function App() {
     if (!identifier || !password) return;
 
     if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') {
-      setCurrentUser({
+      const spdUser: UserProfile = {
         name: 'SPD Master',
         identifier: identifier,
         role: 'spd',
         assignedTeam: 'All Teams (Master)',
-      });
+      };
+      setCurrentUser(spdUser);
       return;
     }
 
@@ -355,20 +205,15 @@ export default function App() {
       if (foundReq) {
         role = 'team_admin';
         assignedTeam = foundReq.assignedTeam;
-      } else {
-        const foundStaff = staffList.find(s => s.id.toLowerCase() === identifier.toLowerCase());
-        if (foundStaff) {
-          role = foundStaff.role;
-          assignedTeam = foundStaff.team;
-        }
       }
 
-      setCurrentUser({
+      const loggedUser: UserProfile = {
         name: data.user.email?.split('@')[0] || identifier,
         identifier: identifier,
         role: role,
         assignedTeam: assignedTeam,
-      });
+      };
+      setCurrentUser(loggedUser);
     }
   };
 
@@ -395,8 +240,7 @@ export default function App() {
       assignedTeam: teams[0] || 'Team A'
     };
     
-    const updated = [newReq, ...signupRequests];
-    setSignupRequests(updated);
+    setSignupRequests([newReq, ...signupRequests]);
     await supabase.from('signup_requests').upsert([newReq]);
     
     alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု အောင်မြင်ပါသည်။ SPD မာစတာမှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
@@ -442,7 +286,6 @@ export default function App() {
           await supabase.from('staff').update({ team: newName }).eq('id', st.id);
         }
       }
-
       alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ ပြောင်းလဲပြီးပါပြီ။`);
     }
   };
@@ -680,6 +523,17 @@ export default function App() {
     </div>
   );
 
+  // Show Safe Loading Screen while initializing to prevent Blur/Blank Screen
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white space-y-3">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs text-slate-400 font-medium">Loading ShiftMaster HR...</p>
+      </div>
+    );
+  }
+
+  // If not logged in, show Login / Signup Page
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
@@ -729,6 +583,7 @@ export default function App() {
     );
   }
 
+  // Main Dashboard View after Login
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col print:bg-white print:text-black">
       <style>{`
@@ -1260,4 +1115,4 @@ export default function App() {
       </main>
     </div>
   );
-}
+      }

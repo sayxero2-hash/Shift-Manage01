@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './utils/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { 
   ShieldCheck, UserPlus, ArrowLeft, Users, Building2, Calendar, 
   LayoutDashboard, LogOut, Send, Globe, Bot, User, Plus, FileText, 
@@ -12,8 +12,13 @@ import CheckInPage from './components/CheckInPage';
 import CheckOutPage from './components/CheckOutPage';
 import PayrollSummaryPage from './components/PayrollSummaryPage';
 
+// --- SUPABASE CLIENT SETUP (Direct inside App.tsx to avoid missing file errors) ---
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 type Language = 'en' | 'my' | 'th' | 'zh';
-type ActiveTab = 'dashboard' | 'checkin' | 'checkout' | 'payroll' | 'team' | 'admin';
+type ActiveTab = 'dashboard' | 'checkin' | 'checkout' | 'payroll';
 
 interface UserProfile {
   name: string;
@@ -206,7 +211,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Navigation Tabs including CheckIn, CheckOut, Payroll components */}
         <div className="bg-slate-900/90 border-t border-slate-800 flex justify-around py-2.5 overflow-x-auto text-xs font-semibold">
           <button onClick={() => setActiveTab('dashboard')} className={`px-3 py-1.5 rounded-lg ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Dashboard</button>
           <button onClick={() => setActiveTab('checkin')} className={`px-3 py-1.5 rounded-lg ${activeTab === 'checkin' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Check-In</button>

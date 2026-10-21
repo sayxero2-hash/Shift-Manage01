@@ -185,6 +185,22 @@ export default function App() {
     ];
   });
 
+  // Selected Team States for forms (Auto synced with existing teams)
+  const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>(teams[0] || 'Team A');
+  const [bulkTeam, setBulkTeam] = useState<string>(teams[0] || 'Team A');
+
+  // Keep dropdown selections synced when teams change
+  useEffect(() => {
+    if (teams.length > 0) {
+      if (!teams.includes(selectedTeamForAdd)) {
+        setSelectedTeamForAdd(teams[0]);
+      }
+      if (!teams.includes(bulkTeam)) {
+        setBulkTeam(teams[0]);
+      }
+    }
+  }, [teams]);
+
   // Save to LocalStorage whenever states change
   useEffect(() => {
     localStorage.setItem('shiftmaster_teams', JSON.stringify(teams));
@@ -212,14 +228,12 @@ export default function App() {
 
   const [newStaffId, setNewStaffId] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
-  const [selectedTeamForAdd, setSelectedTeamForAdd] = useState('Team A');
 
   // SPD Search States
   const [spdSearchQuery, setSpdSearchQuery] = useState('');
   const [spdSelectedTeamFilter, setSpdSelectedTeamFilter] = useState('All');
 
   const [bulkText, setBulkText] = useState('');
-  const [bulkTeam, setBulkTeam] = useState('Team A');
 
   const [selectedShiftType, setSelectedShiftType] = useState<'Day' | 'Night'>('Day');
   const [customDateTime, setCustomDateTime] = useState('21/10/2026, 08:00 AM');
@@ -238,7 +252,7 @@ export default function App() {
     e.preventDefault();
     if (identifier && password) {
       let role: 'spd' | 'team_admin' | 'employee' = 'team_admin';
-      let assignedTeam = 'Team A';
+      let assignedTeam = teams[0] || 'Team A';
 
       if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') {
         role = 'spd';
@@ -294,7 +308,8 @@ export default function App() {
   const handleAddTeam = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTeamName && !teams.includes(newTeamName)) {
-      setTeams([...teams, newTeamName]);
+      const updatedTeams = [...teams, newTeamName];
+      setTeams(updatedTeams);
       setNewTeamName('');
     }
   };
@@ -303,10 +318,17 @@ export default function App() {
     const updatedName = prompt(`Team (${oldTeamName}) အတွက် နာမည်သစ် ရိုက်ထည့်ပါ:`, oldTeamName);
     if (updatedName && updatedName.trim() !== '' && updatedName !== oldTeamName) {
       const newName = updatedName.trim();
-      setTeams(teams.map(t => t === oldTeamName ? newName : t));
+      const updatedTeams = teams.map(t => t === oldTeamName ? newName : t);
+      
+      setTeams(updatedTeams);
       setStaffList(staffList.map(s => s.team === oldTeamName ? { ...s, team: newName } : s));
       setLiveRecords(liveRecords.map(r => r.team === oldTeamName ? { ...r, team: newName } : r));
       setSignupRequests(signupRequests.map(r => r.assignedTeam === oldTeamName ? { ...r, assignedTeam: newName } : r));
+      
+      // Update form dropdown state if renamed
+      if (selectedTeamForAdd === oldTeamName) setSelectedTeamForAdd(newName);
+      if (bulkTeam === oldTeamName) setBulkTeam(newName);
+
       alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။`);
     }
   };
@@ -321,6 +343,8 @@ export default function App() {
 
   const handleSpdDeleteEntireTeam = (teamName: string) => {
     if (confirm(`Team (${teamName}) ထဲရှိ ဝန်ထမ်းအားလုံးကို အပြီးအပိုင် ဖျက်ရန် သေချာပါသလား?`)) {
+      const updatedTeams = teams.filter(t => t !== teamName);
+      setTeams(updatedTeams);
       setStaffList(staffList.filter(s => s.team !== teamName));
       setLiveRecords(liveRecords.filter(r => r.team !== teamName));
       alert(`Team (${teamName}) ရှိ ဝန်ထမ်းများအားလုံးကို ဖျက်ပြီးပါပြီ။`);
@@ -336,18 +360,20 @@ export default function App() {
       return;
     }
 
+    const targetTeam = selectedTeamForAdd || teams[0] || 'Team A';
+
     const newStaff: StaffMember = {
       id: newStaffId.toUpperCase(),
       name: newStaffName,
       role: 'employee',
-      team: selectedTeamForAdd,
+      team: targetTeam,
       status: 'Active'
     };
 
     setStaffList([...staffList, newStaff]);
     setNewStaffId('');
     setNewStaffName('');
-    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${selectedTeamForAdd} သို့ အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။`);
+    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${targetTeam} သို့ အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။`);
   };
 
   const toggleStaffStatus = (id: string) => {
@@ -358,6 +384,7 @@ export default function App() {
     e.preventDefault();
     if (!bulkText.trim()) return;
 
+    const targetTeam = bulkTeam || teams[0] || 'Team A';
     const lines = bulkText.split('\n');
     let addedCount = 0;
     const newStaffs: StaffMember[] = [...staffList];
@@ -372,7 +399,7 @@ export default function App() {
             id,
             name,
             role: 'employee',
-            team: bulkTeam,
+            team: targetTeam,
             status: 'Active'
           });
           addedCount++;
@@ -382,7 +409,7 @@ export default function App() {
 
     setStaffList(newStaffs);
     setBulkText('');
-    alert(`Successfully imported ${addedCount} staff members as Active into ${bulkTeam}!`);
+    alert(`Successfully imported ${addedCount} staff members as Active into ${targetTeam}!`);
   };
 
   const handlePrint = () => {

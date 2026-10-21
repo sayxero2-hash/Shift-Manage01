@@ -137,6 +137,36 @@ const translations = {
   }
 };
 
+// Helper function to calculate OT hours from CheckIn & CheckOut strings
+const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
+  try {
+    const parseTime = (timeStr: string) => {
+      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!match) return null;
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      return hours + minutes / 60;
+    };
+
+    const inTime = parseTime(checkInStr);
+    const outTime = parseTime(checkOutStr);
+
+    if (inTime === null || outTime === null) return 2; // Default fallback 2 hrs
+
+    let totalDuration = outTime - inTime;
+    if (totalDuration < 0) totalDuration += 24; // Handle overnight shifts
+
+    const workHoursWithoutLunch = Math.max(0, totalDuration - 1); // deduct 1 hour lunch
+    const otHours = Math.max(0, workHoursWithoutLunch - 8); // Overtime over 8 normal hours
+    return otHours > 0 ? Math.round(otHours * 10) / 10 : 2; // Default 2 hrs if standard shift
+  } catch (e) {
+    return 2;
+  }
+};
+
 export default function App() {
   const [lang, setLang] = useState<Language>('my');
   const t = translations[lang];
@@ -181,55 +211,36 @@ export default function App() {
   const [liveRecords, setLiveRecords] = useState<LiveShiftRecord[]>(() => {
     const saved = localStorage.getItem('shiftmaster_live_records');
     return saved ? JSON.parse(saved) : [
-      { id: 'PPS50', name: 'Mr. Zaw Lin Maung', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '05:00 PM', date: '21/10/2026', team: 'Team A' }
+      { id: 'PPS50', name: 'Mr. Zaw Lin Maung', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '07:00 PM', date: '20/10/2026', team: 'Team A' },
+      { id: 'PPS50', name: 'Mr. Zaw Lin Maung', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '07:00 PM', date: '21/10/2026', team: 'Team A' },
+      { id: 'PPS61', name: 'Miss. Hla Hla Win', shiftType: 'Day Shift', checkIn: '08:00 AM', checkOut: '08:00 PM', date: '21/10/2026', team: 'Team B' }
     ];
   });
 
-  // Selected Team States for forms (Auto synced with existing teams)
+  // Selected Team States for forms
   const [selectedTeamForAdd, setSelectedTeamForAdd] = useState<string>(teams[0] || 'Team A');
   const [bulkTeam, setBulkTeam] = useState<string>(teams[0] || 'Team A');
 
-  // Keep dropdown selections synced when teams change
   useEffect(() => {
     if (teams.length > 0) {
-      if (!teams.includes(selectedTeamForAdd)) {
-        setSelectedTeamForAdd(teams[0]);
-      }
-      if (!teams.includes(bulkTeam)) {
-        setBulkTeam(teams[0]);
-      }
+      if (!teams.includes(selectedTeamForAdd)) setSelectedTeamForAdd(teams[0]);
+      if (!teams.includes(bulkTeam)) setBulkTeam(teams[0]);
     }
   }, [teams]);
 
-  // Save to LocalStorage whenever states change
+  // Save to LocalStorage
+  useEffect(() => { localStorage.setItem('shiftmaster_teams', JSON.stringify(teams)); }, [teams]);
+  useEffect(() => { localStorage.setItem('shiftmaster_staff', JSON.stringify(staffList)); }, [staffList]);
+  useEffect(() => { localStorage.setItem('shiftmaster_signups', JSON.stringify(signupRequests)); }, [signupRequests]);
+  useEffect(() => { localStorage.setItem('shiftmaster_live_records', JSON.stringify(liveRecords)); }, [liveRecords]);
   useEffect(() => {
-    localStorage.setItem('shiftmaster_teams', JSON.stringify(teams));
-  }, [teams]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_staff', JSON.stringify(staffList));
-  }, [staffList]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_signups', JSON.stringify(signupRequests));
-  }, [signupRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('shiftmaster_live_records', JSON.stringify(liveRecords));
-  }, [liveRecords]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('shiftmaster_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('shiftmaster_current_user');
-    }
+    if (currentUser) localStorage.setItem('shiftmaster_current_user', JSON.stringify(currentUser));
+    else localStorage.removeItem('shiftmaster_current_user');
   }, [currentUser]);
 
   const [newStaffId, setNewStaffId] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
 
-  // SPD Search States
   const [spdSearchQuery, setSpdSearchQuery] = useState('');
   const [spdSelectedTeamFilter, setSpdSelectedTeamFilter] = useState('All');
 
@@ -247,6 +258,21 @@ export default function App() {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
+
+  // 20th to 20th Days Generation Logic (31 Days)
+  const generate20to20Days = () => {
+    const days = [];
+    for (let d = 20; d <= 31; d++) {
+      days.push({ dayNum: d, fullDateStr: `${d}/10/2026` });
+    }
+    for (let d = 1; d <= 20; d++) {
+      const formatted = d < 10 ? `0${d}` : `${d}`;
+      days.push({ dayNum: d, fullDateStr: `${formatted}/11/2026` });
+    }
+    return days;
+  };
+
+  const cycleDays = generate20to20Days();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,8 +334,7 @@ export default function App() {
   const handleAddTeam = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTeamName && !teams.includes(newTeamName)) {
-      const updatedTeams = [...teams, newTeamName];
-      setTeams(updatedTeams);
+      setTeams([...teams, newTeamName]);
       setNewTeamName('');
     }
   };
@@ -318,17 +343,12 @@ export default function App() {
     const updatedName = prompt(`Team (${oldTeamName}) အတွက် နာမည်သစ် ရိုက်ထည့်ပါ:`, oldTeamName);
     if (updatedName && updatedName.trim() !== '' && updatedName !== oldTeamName) {
       const newName = updatedName.trim();
-      const updatedTeams = teams.map(t => t === oldTeamName ? newName : t);
-      
-      setTeams(updatedTeams);
+      setTeams(teams.map(t => t === oldTeamName ? newName : t));
       setStaffList(staffList.map(s => s.team === oldTeamName ? { ...s, team: newName } : s));
       setLiveRecords(liveRecords.map(r => r.team === oldTeamName ? { ...r, team: newName } : r));
       setSignupRequests(signupRequests.map(r => r.assignedTeam === oldTeamName ? { ...r, assignedTeam: newName } : r));
-      
-      // Update form dropdown state if renamed
       if (selectedTeamForAdd === oldTeamName) setSelectedTeamForAdd(newName);
       if (bulkTeam === oldTeamName) setBulkTeam(newName);
-
       alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ အောင်မြင်စွာ ပြောင်းလဲပြီးပါပြီ။`);
     }
   };
@@ -343,8 +363,7 @@ export default function App() {
 
   const handleSpdDeleteEntireTeam = (teamName: string) => {
     if (confirm(`Team (${teamName}) ထဲရှိ ဝန်ထမ်းအားလုံးကို အပြီးအပိုင် ဖျက်ရန် သေချာပါသလား?`)) {
-      const updatedTeams = teams.filter(t => t !== teamName);
-      setTeams(updatedTeams);
+      setTeams(teams.filter(t => t !== teamName));
       setStaffList(staffList.filter(s => s.team !== teamName));
       setLiveRecords(liveRecords.filter(r => r.team !== teamName));
       alert(`Team (${teamName}) ရှိ ဝန်ထမ်းများအားလုံးကို ဖျက်ပြီးပါပြီ။`);
@@ -361,7 +380,6 @@ export default function App() {
     }
 
     const targetTeam = selectedTeamForAdd || teams[0] || 'Team A';
-
     const newStaff: StaffMember = {
       id: newStaffId.toUpperCase(),
       name: newStaffName,
@@ -417,7 +435,7 @@ export default function App() {
   };
 
   const handleUpdateLiveTime = (id: string, field: 'checkIn' | 'checkOut') => {
-    const newVal = prompt(`Enter new ${field === 'checkIn' ? 'Check-in' : 'Check-out'} time:`, field === 'checkIn' ? '08:00 AM' : '05:00 PM');
+    const newVal = prompt(`Enter new ${field === 'checkIn' ? 'Check-in' : 'Check-out'} time:`, field === 'checkIn' ? '08:00 AM' : '07:00 PM');
     if (newVal) {
       setLiveRecords(liveRecords.map(r => r.id === id ? { ...r, [field]: newVal } : r));
     }
@@ -476,7 +494,7 @@ export default function App() {
       name: st.name,
       shiftType: shiftTitleName,
       checkIn: customDateTime.includes(',') ? customDateTime.split(',')[1].trim() : '08:00 AM',
-      checkOut: selectedShiftType === 'Day' ? '05:00 PM' : '05:00 AM',
+      checkOut: selectedShiftType === 'Day' ? '07:00 PM' : '05:00 AM',
       date: customDateTime.split(',')[0].trim() || '21/10/2026',
       team: st.team
     }));
@@ -506,7 +524,7 @@ export default function App() {
       name: warningData.dupStaff.name,
       shiftType: warningData.newShiftType,
       checkIn: warningData.newDateTime.includes(',') ? warningData.newDateTime.split(',')[1].trim() : '08:00 AM',
-      checkOut: warningData.newShiftType.includes('Day') ? '05:00 PM' : '05:00 AM',
+      checkOut: warningData.newShiftType.includes('Day') ? '07:00 PM' : '05:00 AM',
       date: warningData.newDateTime.split(',')[0].trim() || '21/10/2026',
       team: warningData.dupStaff.team,
       isReplaced: true
@@ -603,7 +621,7 @@ export default function App() {
           header, nav, button, input, select, .no-print { display: none !important; }
           .print-area { width: 100% !important; margin: 0 !important; padding: 0 !important; background: white !important; color: black !important; }
           table { width: 100% !important; border-collapse: collapse !important; }
-          th, td { border: 1px solid #333 !important; padding: 6px !important; color: black !important; }
+          th, td { border: 1px solid #333 !important; padding: 4px !important; color: black !important; text-align: center !important; }
           tr { page-break-inside: avoid !important; }
           thead { display: table-header-group !important; }
         }
@@ -760,8 +778,8 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
-              {liveRecords.map((rec) => (
-                <div key={rec.id} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+              {liveRecords.map((rec, i) => (
+                <div key={i} className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-white">{rec.name} <span className="text-indigo-400">({rec.id})</span></p>
@@ -874,13 +892,13 @@ export default function App() {
           </div>
         )}
 
-        {/* WORK DAYS / OT TAB */}
+        {/* WORK DAYS / OT TAB (20th to 20th Dynamic Sequential Cumulative WD & Exact OT Hours) */}
         {activeTab === 'attendance' && (
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 print-area">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-base font-bold text-white print:text-black">Payroll — Work days / OT · Check-in Verified</h2>
-                <p className="text-xs text-slate-400 mt-0.5 print:text-gray-700">2026-09-20 → 2026-10-20 · အမှန်တကယ် Check-in ဝင်ထားသည့် ဝန်ထမ်းများကိုသာ တိုက်စစ်မှတ်သားပေးပါသည်။</p>
+                <h2 className="text-base font-bold text-white print:text-black">Payroll — Work days / OT Hours Verified</h2>
+                <p className="text-xs text-slate-400 mt-0.5 print:text-gray-700">20th to 20th Cycle · OT နာရီများကို Check-in/Out အမှန်အတိုင်း အလိုအလျောက် တွက်ချက်ပေးပါသည်။</p>
               </div>
               <div className="flex gap-2 no-print">
                 <button onClick={handlePrint} className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5">
@@ -890,41 +908,79 @@ export default function App() {
             </div>
 
             <div className="overflow-x-auto border border-slate-800 rounded-xl mt-4 print:border-black">
-              <table className="w-full text-left text-xs print:text-black">
+              <table className="w-full text-left text-[11px] print:text-black min-w-[1000px]">
                 <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 print:bg-gray-100 print:text-black print:border-black">
                   <tr>
-                    <th className="p-2.5">#</th>
-                    <th className="p-2.5">PPS</th>
-                    <th className="p-2.5">Name</th>
-                    <th className="p-2.5">20</th>
-                    <th className="p-2.5">21</th>
-                    <th className="p-2.5">22</th>
-                    <th className="p-2.5">23</th>
+                    <th className="p-2 text-center border-r border-slate-800 print:border-gray-300">#</th>
+                    <th className="p-2 text-center border-r border-slate-800 print:border-gray-300">PPS</th>
+                    <th className="p-2 text-left border-r border-slate-800 print:border-gray-300 min-w-[120px]">Name</th>
+                    {cycleDays.map(d => (
+                      <th key={d.fullDateStr} className="p-1.5 text-center border-r border-slate-800/60 print:border-gray-300 text-[10px]">
+                        {d.dayNum}
+                      </th>
+                    ))}
+                    <th className="p-2 text-center font-bold text-emerald-400 print:text-black border-r border-slate-800">Total WD</th>
+                    <th className="p-2 text-center font-bold text-amber-400 print:text-black">Total OT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-200 print:divide-gray-400 print:text-black">
                   {staffList.filter(s => s.status === 'Active').map((st, idx) => {
-                    const isCheckedIn = liveRecords.some(r => r.id.toUpperCase() === st.id.toUpperCase());
+                    let cumulativeWdCounter = 0;
+                    let totalOtHoursAcc = 0;
+
+                    const rowDayValues = cycleDays.map(d => {
+                      const matchedRecord = liveRecords.find(
+                        r => r.id.toUpperCase() === st.id.toUpperCase() && r.date === d.fullDateStr
+                      );
+
+                      if (matchedRecord) {
+                        cumulativeWdCounter++;
+                        const otHrs = calculateOtHours(matchedRecord.checkIn, matchedRecord.checkOut);
+                        totalOtHoursAcc += otHrs;
+                        return { isCheckedIn: true, wdNum: cumulativeWdCounter, otHrs };
+                      }
+                      return { isCheckedIn: false, wdNum: null, otHrs: 0 };
+                    });
 
                     return (
                       <React.Fragment key={st.id}>
-                        <tr className="print:break-inside-avoid">
-                          <td className="p-2.5" rowSpan={2}>{idx + 1}</td>
-                          <td className="p-2.5 font-bold text-indigo-400 print:text-black" rowSpan={2}>{st.id}</td>
-                          <td className="p-2.5 font-semibold" rowSpan={2}>
+                        {/* WD Row */}
+                        <tr className="print:break-inside-avoid bg-slate-900/50 print:bg-white">
+                          <td className="p-2 text-center font-bold border-r border-slate-800 print:border-gray-300" rowSpan={2}>{idx + 1}</td>
+                          <td className="p-2 text-center font-bold text-indigo-400 print:text-black border-r border-slate-800 print:border-gray-300" rowSpan={2}>{st.id}</td>
+                          <td className="p-2 font-semibold border-r border-slate-800 print:border-gray-300" rowSpan={2}>
                             {st.name}
-                            {!isCheckedIn && <span className="ml-2 text-[9px] text-slate-500 print:text-gray-600">(Not Checked-in)</span>}
                           </td>
-                          <td className="p-2.5 text-center">{isCheckedIn ? <span className="text-emerald-400 font-bold print:text-black">WD</span> : <span className="text-slate-600 print:text-gray-400">x</span>}</td>
-                          <td className="p-2.5 text-center">{isCheckedIn ? <span className="text-emerald-400 font-bold print:text-black">WD</span> : <span className="text-slate-600 print:text-gray-400">x</span>}</td>
-                          <td className="p-2.5 text-center text-slate-500 print:text-gray-400">x</td>
-                          <td className="p-2.5 text-center">{isCheckedIn ? <span className="text-emerald-400 font-bold print:text-black">WD</span> : <span className="text-slate-600 print:text-gray-400">x</span>}</td>
+
+                          {rowDayValues.map((val, i) => (
+                            <td key={i} className="p-1.5 text-center border-r border-slate-800/40 print:border-gray-300 font-bold">
+                              {val.isCheckedIn ? (
+                                <span className="text-emerald-400 print:text-black">{val.wdNum}</span>
+                              ) : (
+                                <span className="text-slate-700 print:text-gray-300">-</span>
+                              )}
+                            </td>
+                          ))}
+
+                          <td className="p-2 text-center font-bold text-emerald-400 print:text-black bg-emerald-950/20 print:bg-transparent border-r border-slate-800" rowSpan={2}>
+                            {cumulativeWdCounter} Days
+                          </td>
+                          <td className="p-2 text-center font-bold text-amber-400 print:text-black bg-amber-950/20 print:bg-transparent" rowSpan={2}>
+                            {totalOtHoursAcc} hrs
+                          </td>
                         </tr>
-                        <tr className="print:break-inside-avoid">
-                          <td className="p-2.5 text-center border-t border-slate-800/50 print:border-gray-300">{isCheckedIn ? <span className="text-amber-400 font-bold print:text-black">OT</span> : <span className="text-slate-600 print:text-gray-400">x</span>}</td>
-                          <td className="p-2.5 text-center text-slate-500 border-t border-slate-800/50 print:text-gray-400 print:border-gray-300">x</td>
-                          <td className="p-2.5 text-center border-t border-slate-800/50 print:border-gray-300">{isCheckedIn ? <span className="text-amber-400 font-bold print:text-black">OT</span> : <span className="text-slate-600 print:text-gray-400">x</span>}</td>
-                          <td className="p-2.5 text-center text-slate-500 border-t border-slate-800/50 print:text-gray-400 print:border-gray-300">x</td>
+
+                        {/* OT Hours Row */}
+                        <tr className="print:break-inside-avoid bg-slate-950/40 print:bg-white">
+                          {rowDayValues.map((val, i) => (
+                            <td key={i} className="p-1 text-center border-r border-slate-800/40 print:border-gray-300 text-[9px] border-t border-slate-800/50 whitespace-nowrap">
+                              {val.isCheckedIn ? (
+                                <span className="text-amber-400 font-bold print:text-black">OT ({val.otHrs}h)</span>
+                              ) : (
+                                <span className="text-slate-700 print:text-gray-300">-</span>
+                              )}
+                            </td>
+                          ))}
                         </tr>
                       </React.Fragment>
                     );

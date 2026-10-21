@@ -249,7 +249,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { 
       sender: 'bot', 
-      text: '🤖 မင်္ဂလာပါ! Supabase Database နှင့် တိုက်ရိုက်ချိတ်ဆက်ပြီးသားဖြစ်ပါသည်။ Shift ရွေးချယ်၊ ရက်စွဲထည့်ပြီး ဝန်ထမ်း ID များကို ပို့လိုက်ရုံဖြင့် အချက်အလက်များ Cloud တွင် အလိုအလျောက် သိမ်းဆည်းသွားပါမည်။', 
+      text: '🤖 မင်္ဂလာပါ! Supabase Auth စနစ်ဖြင့် အပြည့်အဝ ချိတ်ဆက်ပြီးသားဖြစ်ပါသည်။', 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     }
   ]);
@@ -268,31 +268,48 @@ export default function App() {
 
   const cycleDays = generate20to20Days();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (identifier && password) {
+    if (!identifier || !password) return;
+
+    if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') {
+      setCurrentUser({
+        name: 'SPD Master',
+        identifier: identifier,
+        role: 'spd',
+        assignedTeam: 'All Teams (Master)',
+      });
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: identifier,
+      password: password,
+    });
+
+    if (error) {
+      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ (Email သို့မဟုတ် Password စစ်ဆေးပါ): ' + error.message);
+      return;
+    }
+
+    if (data.user) {
       let role: 'spd' | 'team_admin' | 'employee' = 'team_admin';
       let assignedTeam = teams[0] || 'Team A';
 
-      if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') {
-        role = 'spd';
-        assignedTeam = 'All Teams (Master)';
+      const foundReq = signupRequests.find(r => r.email.toLowerCase() === identifier.toLowerCase() && r.status === 'Approved');
+      if (foundReq) {
+        role = 'team_admin';
+        assignedTeam = foundReq.assignedTeam;
       } else {
-        const foundReq = signupRequests.find(r => r.email.toLowerCase() === identifier.toLowerCase() && r.status === 'Approved');
-        if (foundReq) {
-          role = 'team_admin';
-          assignedTeam = foundReq.assignedTeam;
-        } else {
-          const foundStaff = staffList.find(s => s.id.toLowerCase() === identifier.toLowerCase() || s.name.toLowerCase().includes(identifier.toLowerCase()));
-          if (foundStaff) {
-            role = foundStaff.role;
-            assignedTeam = foundStaff.team;
-          }
+        const foundStaff = staffList.find(s => s.id.toLowerCase() === identifier.toLowerCase());
+        if (foundStaff) {
+          role = foundStaff.role;
+          assignedTeam = foundStaff.team;
         }
       }
 
       setCurrentUser({
-        name: fullName || (identifier.includes('@') ? identifier.split('@')[0] : identifier.toUpperCase()),
+        name: data.user.email?.split('@')[0] || identifier,
         identifier: identifier,
         role: role,
         assignedTeam: assignedTeam,
@@ -302,23 +319,33 @@ export default function App() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (identifier && password && fullName) {
-      const newReq: SignupRequest = {
-        id: 'req_' + Date.now(),
-        name: fullName,
-        email: identifier,
-        status: 'Pending',
-        freeTrialDays: 7,
-        assignedTeam: teams[0] || 'Team A'
-      };
-      
-      const updated = [newReq, ...signupRequests];
-      setSignupRequests(updated);
-      await supabase.from('signup_requests').upsert([newReq]);
-      
-      alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု အောင်မြင်ပါသည်။ SPD မာစတာမှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
-      setAuthMode('login');
+    if (!identifier || !password || !fullName) return;
+
+    const { error } = await supabase.auth.signUp({
+      email: identifier,
+      password: password,
+    });
+
+    if (error) {
+      alert('အကောင့်အသစ်ဖွင့်ခြင်း မအောင်မြင်ပါ: ' + error.message);
+      return;
     }
+
+    const newReq: SignupRequest = {
+      id: 'req_' + Date.now(),
+      name: fullName,
+      email: identifier,
+      status: 'Pending',
+      freeTrialDays: 7,
+      assignedTeam: teams[0] || 'Team A'
+    };
+    
+    const updated = [newReq, ...signupRequests];
+    setSignupRequests(updated);
+    await supabase.from('signup_requests').upsert([newReq]);
+    
+    alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု အောင်မြင်ပါသည်။ SPD မာစတာမှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
+    setAuthMode('login');
   };
 
   const handleApproveRequest = async (id: string, status: 'Approved' | 'Rejected') => {
@@ -606,14 +633,14 @@ export default function App() {
           <div className="flex flex-col items-center mb-6">
             <div className="bg-indigo-600 p-3 rounded-2xl text-white mb-2"><ShieldCheck className="w-8 h-8" /></div>
             <h1 className="text-xl font-bold">{t.appName}</h1>
-            <p className="text-xs text-slate-400 mt-1">Cloud Database (Supabase) Connected</p>
+            <p className="text-xs text-slate-400 mt-1">Supabase Auth Secure Login</p>
           </div>
 
           {authMode === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email or Phone No</label>
-                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="example@gmail.com or 09xxxxxxxxx" />
+                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="example@gmail.com or phone" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>
@@ -632,7 +659,7 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Email or Phone No</label>
-                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="example@gmail.com or 09xxxxxxxxx" />
+                <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white text-sm outline-none" placeholder="example@gmail.com or phone" />
               </div>
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>
@@ -671,7 +698,7 @@ export default function App() {
 
           <div className="flex items-center gap-2">
             <LanguageSelector />
-            <button onClick={() => setCurrentUser(null)} className="p-2 bg-slate-800 hover:bg-rose-600/20 text-slate-300 rounded-xl" title={t.signOut}><LogOut className="w-4 h-4" /></button>
+            <button onClick={() => { supabase.auth.signOut(); setCurrentUser(null); }} className="p-2 bg-slate-800 hover:bg-rose-600/20 text-slate-300 rounded-xl" title={t.signOut}><LogOut className="w-4 h-4" /></button>
           </div>
         </div>
 

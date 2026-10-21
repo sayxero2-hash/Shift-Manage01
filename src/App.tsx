@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { translations, calculateOtHours, Language } from './locales/translations';
 import { 
   LogIn, ShieldCheck, UserPlus, ArrowLeft, Users, Building2, Calendar, 
   LayoutDashboard, LogOut, Send, Globe, Bot, User, Plus, FileText, 
@@ -9,10 +8,113 @@ import {
   RefreshCw, Trash2, Search, UserCog
 } from 'lucide-react';
 
-// Supabase Client initialized directly inside App.tsx to fix build missing file error
+// --- SUPABASE CLIENT SETUP ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// --- LOCALES & TRANSLATIONS ---
+export type Language = 'en' | 'my' | 'th' | 'zh';
+
+export const translations = {
+  en: {
+    appName: "ShiftMaster HR",
+    signIn: "Sign In",
+    signUp: "Sign Up",
+    dashboard: "Team Chat & Dashboard",
+    shiftRoster: "Shift Roster & Live",
+    teamMembers: "Team Members",
+    workDaysOT: "Work Days / OT",
+    spdControl: "SPD Master Control",
+    welcome: "Welcome back",
+    checkInChatTitle: "Team Chat Assistant",
+    checkInPrompt: "Type Staff IDs (e.g. PPS50, PPS61)...",
+    checkInBtn: "Send",
+    shiftLabel: "Shift Type",
+    dateTimeLabel: "Date & Time",
+    signOut: "Sign Out",
+  },
+  my: {
+    appName: "ShiftMaster HR",
+    signIn: "အကောင့်ဝင်ရန်",
+    signUp: "အကောင့်အသစ်ဖွင့်ရန်",
+    dashboard: "Team Chat နှင့် ဒက်ရှ်ဘုတ်",
+    shiftRoster: "အလုပ်ချိန်ဇယားနှင့် Live",
+    teamMembers: "အဖွဲ့ဝင်များ",
+    workDaysOT: "အလုပ်ရက် / အိုတီ (WD/OT)",
+    spdControl: "SPD မာစတာ ထိန်းချုပ်ရန်",
+    welcome: "ပြန်လည်ကြိုဆိုပါတယ်",
+    checkInChatTitle: "Team Chat လက်ထောက်",
+    checkInPrompt: "ဝန်ထမ်း ID များ ရိုက်ထည့်ပါ (ဥပမာ- PPS50, PPS61)...",
+    checkInBtn: "ပို့မည်",
+    shiftLabel: "အလုပ်ချိန်အမျိုးအစား",
+    dateTimeLabel: "ရက်စွဲနှင့် အချိန်",
+    signOut: "ထွက်ရန်",
+  },
+  th: {
+    appName: "ShiftMaster HR",
+    signIn: "เข้าสู่ระบบ",
+    signUp: "สมัครสมาชิก",
+    dashboard: "แชททีม & แดชบอร์ด",
+    shiftRoster: "ตารางกะ & สด",
+    teamMembers: "สมาชิกในทีม",
+    workDaysOT: "วันทำงาน / OT",
+    spdControl: "การควบคุม SPD",
+    welcome: "ยินดีต้อนรับกลับมา",
+    checkInChatTitle: "ผู้ช่วยแชททีม",
+    checkInPrompt: "พิมพ์รหัสพนักงาน...",
+    checkInBtn: "ส่ง",
+    shiftLabel: "ประเภทกะงาน",
+    dateTimeLabel: "วันที่และเวลา",
+    signOut: "ออกจากระบบ",
+  },
+  zh: {
+    appName: "ShiftMaster HR",
+    signIn: "登录",
+    signUp: "注册",
+    dashboard: "团队聊天与仪表盘",
+    shiftRoster: "排班表与实时",
+    teamMembers: "团队成员",
+    workDaysOT: "工作日 / 加班",
+    spdControl: "SPD 控制面板",
+    welcome: "欢迎回来",
+    checkInChatTitle: "团队聊天助手",
+    checkInPrompt: "输入员工ID...",
+    checkInBtn: "发送",
+    shiftLabel: "班次类型",
+    dateTimeLabel: "日期与时间",
+    signOut: "登出",
+  }
+};
+
+export const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
+  try {
+    const parseTime = (timeStr: string) => {
+      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!match) return null;
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3].toUpperCase();
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      return hours + minutes / 60;
+    };
+
+    const inTime = parseTime(checkInStr);
+    const outTime = parseTime(checkOutStr);
+
+    if (inTime === null || outTime === null) return 2;
+
+    let totalDuration = outTime - inTime;
+    if (totalDuration < 0) totalDuration += 24;
+
+    const workHoursWithoutLunch = Math.max(0, totalDuration - 1);
+    const otHours = Math.max(0, workHoursWithoutLunch - 8);
+    return otHours > 0 ? Math.round(otHours * 10) / 10 : 2;
+  } catch (e) {
+    return 2;
+  }
+};
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type ActiveTab = 'dashboard' | 'shifts' | 'team' | 'attendance' | 'admin';
@@ -1071,7 +1173,7 @@ export default function App() {
                 <input 
                   type="text" 
                   value={spdSearchQuery} 
-                  onChange={(e) => setspdSearchQuery(e.target.value)} 
+                  onChange={(e) => setSpdSearchQuery(e.target.value)} 
                   placeholder="Staff ID သို့မဟုတ် အမည်ဖြင့် ရှာရန်..." 
                   className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none" 
                 />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './utils/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { translations, calculateOtHours, Language } from './locales/translations';
 import { 
   LogIn, ShieldCheck, UserPlus, ArrowLeft, Users, Building2, Calendar, 
@@ -8,6 +8,11 @@ import {
   ClipboardPaste, ShieldAlert, CheckCircle, XCircle, AlertTriangle, 
   RefreshCw, Trash2, Search, UserCog
 } from 'lucide-react';
+
+// Supabase Client initialized directly inside App.tsx to fix build missing file error
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type ActiveTab = 'dashboard' | 'shifts' | 'team' | 'attendance' | 'admin';
@@ -72,7 +77,6 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   
-  // Loading & Session States to prevent Blur/Blank Screen
   const [isInitializing, setIsInitializing] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
@@ -109,7 +113,6 @@ export default function App() {
     }
   ]);
 
-  // Safe Session Check & Data Fetching on Load
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -118,7 +121,6 @@ export default function App() {
           setCurrentUser(JSON.parse(savedUser));
         }
 
-        // Fetch Data from Supabase safely
         const { data: staffData } = await supabase.from('staff').select('*');
         if (staffData && staffData.length > 0) setStaffList(staffData);
 
@@ -523,7 +525,6 @@ export default function App() {
     </div>
   );
 
-  // Show Safe Loading Screen while initializing to prevent Blur/Blank Screen
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white space-y-3">
@@ -533,7 +534,6 @@ export default function App() {
     );
   }
 
-  // If not logged in, show Login / Signup Page
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4">
@@ -583,7 +583,6 @@ export default function App() {
     );
   }
 
-  // Main Dashboard View after Login
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col print:bg-white print:text-black">
       <style>{`
@@ -1072,7 +1071,7 @@ export default function App() {
                 <input 
                   type="text" 
                   value={spdSearchQuery} 
-                  onChange={(e) => setSpdSearchQuery(e.target.value)} 
+                  onChange={(e) => setspdSearchQuery(e.target.value)} 
                   placeholder="Staff ID သို့မဟုတ် အမည်ဖြင့် ရှာရန်..." 
                   className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white outline-none" 
                 />
@@ -1115,4 +1114,4 @@ export default function App() {
       </main>
     </div>
   );
-      }
+            }

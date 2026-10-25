@@ -221,30 +221,71 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        const { data: staffData } = await supabase.from('staff').select('*');
-        if (staffData && staffData.length > 0) setStaffList(staffData);
+    let active = true;
+    let loading = false;
 
-        const { data: teamData } = await supabase.from('teams').select('*');
-        if (teamData && teamData.length > 0) {
-          setTeams(teamData.map((t: any) => t.name));
+    const loadAppData = async (session: any) => {
+      if (!active || loading || !session) return;
+      loading = true;
+      try {
+        const [staffResult, teamResult, liveResult, requestResult] =
+          await Promise.all([
+            supabase.from('staff').select('*'),
+            supabase.from('teams').select('*'),
+            supabase.from('live_records').select('*'),
+            supabase.from('signup_requests').select('*'),
+          ]);
+
+        const errors = [
+          staffResult.error, teamResult.error,
+          liveResult.error, requestResult.error
+        ].filter(Boolean);
+
+        if (errors.length) {
+          console.error('Supabase load errors:', errors);
+          alert('Database မှ Data ပြန်ဖတ်ရာတွင် ပြဿနာရှိပါသည်။\n' +
+            errors.map((e: any) => e.message).join('\n'));
         }
 
-        const { data: liveData } = await supabase.from('live_records').select('*');
-        if (liveData) setLiveRecords(liveData);
-
-        const { data: reqData } = await supabase.from('signup_requests').select('*');
-        if (reqData) setSignupRequests(reqData);
-
+        if (!active) return;
+        if (!staffResult.error && staffResult.data)
+          setStaffList(staffResult.data as StaffMember[]);
+        if (!teamResult.error && teamResult.data)
+          setTeams(teamResult.data.map((t: any) => t.name).filter(Boolean));
+        if (!liveResult.error && liveResult.data)
+          setLiveRecords(liveResult.data.map((r: any) => ({
+            id: r.id,
+            name: r.name || '',
+            shiftType: r.shifttype || '',
+            checkIn: r.checkin || '',
+            checkOut: r.checkout || '',
+            date: r.date,
+            team: r.team || '',
+            isReplaced: r.isreplaced ?? false,
+          })) as LiveShiftRecord[]);
+        if (!requestResult.error && requestResult.data)
+          setSignupRequests(requestResult.data as SignupRequest[]);
       } catch (err) {
         console.error('Initialization error:', err);
       } finally {
-        setIsInitializing(false);
+        loading = false;
+        if (active) setIsInitializing(false);
       }
     };
 
-    initializeApp();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+          setIsInitializing(true);
+          void loadAppData(session);
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -280,10 +321,31 @@ export default function App() {
     e.preventDefault();
     if (!identifier || !password) return;
 
-    if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com' && password === 'sayxero#100') {
+    if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com') {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: identifier.trim(),
+        password,
+      });
+
+      if (error || !data.user) {
+        alert('SPD Master login မအောင်မြင်ပါ: ' + (error?.message || 'User not found'));
+        return;
+      }
+
+      const { data: isSuperAdmin, error: roleError } = await supabase.rpc('has_role', {
+        _user_id: data.user.id,
+        _role: 'super_admin',
+      });
+
+      if (roleError || isSuperAdmin !== true) {
+        await supabase.auth.signOut();
+        alert('ဤအကောင့်တွင် super_admin အခွင့်အာဏာ မရှိပါ။');
+        return;
+      }
+
       const spdUser: UserProfile = {
         name: 'SPD Master',
-        identifier: identifier,
+        identifier: data.user.email || identifier,
         role: 'spd',
         assignedTeam: 'All Teams (Master)',
       };
@@ -344,31 +406,50 @@ export default function App() {
       assignedTeam: teams[0] || 'Team A'
     };
     
-    setSignupRequests([newReq, ...signupRequests]);
-    await supabase.from('signup_requests').upsert([newReq]);
+    const { error: saveRequestError } = await supabase.from('signup_requests').upsert([newReq]);
+    if (saveRequestError) {
+      console.error('Save signup request failed:', saveRequestError);
+      alert('Signup request သိမ်းမရပါ: ' + saveRequestError.message);
+      return;
+    }
+    setSignupRequests(prev => [newReq, ...prev]);
     
     alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု အောင်မြင်ပါသည်။ SPD မာစတာမှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
     setAuthMode('login');
   };
 
   const handleApproveRequest = async (id: string, status: 'Approved' | 'Rejected') => {
-    const updated = signupRequests.map(r => r.id === id ? { ...r, status } : r);
-    setSignupRequests(updated);
-    await supabase.from('signup_requests').update({ status }).eq('id', id);
+    const { error } = await supabase.from('signup_requests').update({ status }).eq('id', id);
+    if (error) {
+      console.error('Update signup status failed:', error);
+      alert('Request status သိမ်းမရပါ: ' + error.message);
+      return;
+    }
+    setSignupRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   };
 
   const handleUpdateReqTeam = async (id: string, assignedTeam: string) => {
-    const updated = signupRequests.map(r => r.id === id ? { ...r, assignedTeam } : r);
-    setSignupRequests(updated);
-    await supabase.from('signup_requests').update({ assignedTeam }).eq('id', id);
+    const { error } = await supabase.from('signup_requests').update({ assignedTeam }).eq('id', id);
+    if (error) {
+      console.error('Update request team failed:', error);
+      alert('Request Team သိမ်းမရပါ: ' + error.message);
+      return;
+    }
+    setSignupRequests(prev => prev.map(r => r.id === id ? { ...r, assignedTeam } : r));
   };
 
   const handleAddTeam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newTeamName && !teams.includes(newTeamName)) {
-      const updatedTeams = [...teams, newTeamName];
-      setTeams(updatedTeams);
-      await supabase.from('teams').upsert([{ name: newTeamName }]);
+      const teamName = newTeamName.trim();
+      if (!teamName) return;
+      const { error } = await supabase.from('teams').upsert([{ name: teamName }], { onConflict: 'name' });
+      if (error) {
+        console.error('Add team failed:', error);
+        alert('Team သိမ်းမရပါ: ' + error.message);
+        return;
+      }
+      setTeams(prev => prev.includes(teamName) ? prev : [...prev, teamName]);
       setNewTeamName('');
     }
   };
@@ -434,12 +515,17 @@ export default function App() {
       status: 'Active'
     };
 
-    setStaffList([...staffList, newStaff]);
-    await supabase.from('staff').upsert([newStaff]);
+    const { error } = await supabase.from('staff').upsert([newStaff], { onConflict: 'id' });
+    if (error) {
+      console.error('Add staff failed:', error);
+      alert('ဝန်ထမ်းကို Database ထဲ သိမ်းမရပါ: ' + error.message);
+      return;
+    }
 
+    setStaffList(prev => [...prev, newStaff]);
     setNewStaffId('');
     setNewStaffName('');
-    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${targetTeam} သို့ ထည့်သွင်းပြီးပါပြီ။`);
+    alert(`ဝန်ထမ်းသစ် ${newStaff.name} (${newStaff.id}) ကို ${targetTeam} သို့ Database ထဲ သိမ်းပြီးပါပြီ။`);
   };
 
   const toggleStaffStatus = async (id: string) => {
@@ -447,8 +533,13 @@ export default function App() {
     if (!target) return;
     const newStatus = target.status === 'Active' ? 'Resigned' : 'Active';
 
-    setStaffList(staffList.map(s => s.id === id ? { ...s, status: newStatus } : s));
-    await supabase.from('staff').update({ status: newStatus }).eq('id', id);
+    const { error } = await supabase.from('staff').update({ status: newStatus }).eq('id', id);
+    if (error) {
+      console.error('Update staff status failed:', error);
+      alert('ဝန်ထမ်းအခြေအနေ သိမ်းမရပါ: ' + error.message);
+      return;
+    }
+    setStaffList(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s));
   };
 
   const handleBulkImport = async (e: React.FormEvent) => {
@@ -467,16 +558,20 @@ export default function App() {
         const name = parts[1].trim();
         if (id && name && !newStaffs.some(s => s.id === id)) {
           const st: StaffMember = { id, name, role: 'employee', team: targetTeam, status: 'Active' };
-          newStaffs.push(st);
-          await supabase.from('staff').upsert([st]);
-          addedCount++;
+          const { error } = await supabase.from('staff').upsert([st], { onConflict: 'id' });
+          if (error) {
+            console.error(`Bulk import failed for ${id}:`, error);
+          } else {
+            newStaffs.push(st);
+            addedCount++;
+          }
         }
       }
     }
 
     setStaffList(newStaffs);
     setBulkText('');
-    alert(`Successfully imported ${addedCount} staff members into ${targetTeam}!`);
+    alert(`Database ထဲသို့ ဝန်ထမ်း ${addedCount} ဦး သိမ်းပြီးပါပြီ။ မအောင်မြင်သော Row များရှိပါက Console တွင် Error စစ်ပါ။`);
   };
 
   const handlePrint = () => {
@@ -486,9 +581,13 @@ export default function App() {
   const handleUpdateLiveTime = async (id: string, field: 'checkIn' | 'checkOut') => {
     const newVal = prompt(`Enter new ${field === 'checkIn' ? 'Check-in' : 'Check-out'} time:`, field === 'checkIn' ? '08:00 AM' : '07:00 PM');
     if (newVal) {
-      const updated = liveRecords.map(r => r.id === id ? { ...r, [field]: newVal } : r);
-      setLiveRecords(updated);
-      await supabase.from('live_records').update({ [field]: newVal }).eq('id', id);
+      const { error } = await supabase.from('live_records').update({ [field]: newVal }).eq('id', id);
+      if (error) {
+        console.error('Update shift time failed:', error);
+        alert('Shift အချိန် သိမ်းမရပါ: ' + error.message);
+        return;
+      }
+      setLiveRecords(prev => prev.map(r => r.id === id ? { ...r, [field]: newVal } : r));
     }
   };
 
@@ -555,11 +654,25 @@ export default function App() {
       team: st.team
     }));
 
-    const updatedLive = [...newLiveEntries, ...liveRecords];
-    setLiveRecords(updatedLive);
     for (const entry of newLiveEntries) {
-      await supabase.from('live_records').upsert([entry]);
+      const dbEntry = {
+        id: entry.id,
+        name: entry.name,
+        shifttype: entry.shiftType,
+        checkin: entry.checkIn,
+        checkout: entry.checkOut,
+        date: entry.date,
+        team: entry.team,
+      };
+      const { error } = await supabase.from('live_records').upsert([dbEntry]);
+      if (error) {
+        console.error('Save shift failed:', entry.id, error);
+        alert('Shift save failed for ' + entry.id + ': ' + error.message);
+        return;
+      }
     }
+    const updatedLive = [...newLiveEntries, ...liveRecords];
+    setLiveRecords(updatedLive)
 
     let otCalcHours = calculateOtHours(defaultCheckIn, defaultCheckOut);
     let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date: ${customDateTime}\n⏰ Shift: ${shiftTitleName}\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
@@ -592,8 +705,22 @@ export default function App() {
     };
 
     const updatedLive = [updatedRecord, ...liveRecords.filter(r => !(r.id === warningData.dupStaff.id && r.date === warningData.newDateTime))];
+    const { error } = await supabase.from('live_records').upsert([{
+      id: updatedRecord.id,
+      name: updatedRecord.name,
+      shifttype: updatedRecord.shiftType,
+      checkin: updatedRecord.checkIn,
+      checkout: updatedRecord.checkOut,
+      date: updatedRecord.date,
+      team: updatedRecord.team,
+      isreplaced: updatedRecord.isReplaced ?? false,
+    }]);
+    if (error) {
+      console.error('Replace shift failed:', error);
+      alert('Shift အစားထိုး သိမ်းမရပါ: ' + error.message);
+      return;
+    }
     setLiveRecords(updatedLive);
-    await supabase.from('live_records').upsert([updatedRecord]);
 
     setChatMessages(prev => [
       ...prev,

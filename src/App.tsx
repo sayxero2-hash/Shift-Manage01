@@ -275,7 +275,11 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        if (event === 'SIGNED_OUT' || !session) {
+          setIsInitializing(false);
+          return;
+        }
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
           setIsInitializing(true);
           void loadAppData(session);
         }

@@ -567,7 +567,7 @@ export default function App() {
       if (!row) continue;
 
       const match = row.match(/^([^,\t]+?)(?:,|\t)\s*(.+)$/)
-        || row.match(/^(\S+)\s+-\s+(.+)$/);
+        || row.match(/^([^- \t]+)\s*-\s*(.+)$/);
 
       if (!match) {
         failedCount++;

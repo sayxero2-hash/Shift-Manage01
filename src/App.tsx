@@ -551,31 +551,80 @@ export default function App() {
     if (!bulkText.trim()) return;
 
     const targetTeam = bulkTeam || teams[0] || 'Team A';
-    const lines = bulkText.split('\n');
+    const lines = bulkText.split(/\r?\n/);
     let addedCount = 0;
+    let duplicateCount = 0;
+    let failedCount = 0;
+    const failedRows: string[] = [];
+
+    const existingIds = new Set(
+      staffList.map(s => s.id.trim().toUpperCase())
+    );
     const newStaffs: StaffMember[] = [...staffList];
 
     for (const line of lines) {
-      const parts = line.split(/[\t,-]+/);
-      if (parts.length >= 2) {
-        const id = parts[0].trim().toUpperCase();
-        const name = parts[1].trim();
-        if (id && name && !newStaffs.some(s => s.id === id)) {
-          const st: StaffMember = { id, name, role: 'employee', team: targetTeam, status: 'Active' };
-          const { error } = await supabase.from('staff').upsert([st], { onConflict: 'id' });
-          if (error) {
-            console.error(`Bulk import failed for ${id}:`, error);
-          } else {
-            newStaffs.push(st);
-            addedCount++;
-          }
-        }
+      const row = line.trim();
+      if (!row) continue;
+
+      const match = row.match(/^([^,\t]+?)(?:,|\t)\s*(.+)$/)
+        || row.match(/^(\S+)\s+-\s+(.+)$/);
+
+      if (!match) {
+        failedCount++;
+        failedRows.push(row);
+        continue;
       }
+
+      const id = match[1].trim().toUpperCase();
+      const name = match[2].trim();
+
+      if (!id || !name) {
+        failedCount++;
+        failedRows.push(row);
+        continue;
+      }
+
+      if (existingIds.has(id)) {
+        duplicateCount++;
+        continue;
+      }
+
+      const st: StaffMember = {
+        id,
+        name,
+        role: 'employee',
+        team: targetTeam,
+        status: 'Active'
+      };
+
+      const { error } = await supabase
+        .from('staff')
+        .upsert([st], { onConflict: 'id' });
+
+      if (error) {
+        failedCount++;
+        failedRows.push(`${id}: ${error.message}`);
+        console.error(`Bulk import failed for ${id}:`, error);
+        continue;
+      }
+
+      existingIds.add(id);
+      newStaffs.push(st);
+      addedCount++;
     }
 
     setStaffList(newStaffs);
     setBulkText('');
-    alert(`Database ထဲသို့ ဝန်ထမ်း ${addedCount} ဦး သိမ်းပြီးပါပြီ။ မအောင်မြင်သော Row များရှိပါက Console တွင် Error စစ်ပါ။`);
+
+    alert(
+      `Bulk Import ရလဒ်\n\n` +
+      `သိမ်းပြီး: ${addedCount} ဦး\n` +
+      `ID ထပ်နေ: ${duplicateCount} ဦး\n` +
+      `မအောင်မြင်: ${failedCount} ကြောင်း` +
+      (failedRows.length
+        ? `\n\nမအောင်မြင်သော Row များ:\n${failedRows.slice(0, 10).join('\n')}`
+        : '')
+    );
   };
 
   const handlePrint = () => {

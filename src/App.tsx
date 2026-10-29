@@ -649,11 +649,39 @@ export default function App() {
     if (!text) return;
 
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const rawIds = Array.from(new Set(text.split(/[\s,]+/).map(id => id.trim().toUpperCase()).filter(Boolean)));
-    const matchedStaff = staffList.filter(s => rawIds.includes(s.id.toUpperCase()) && s.status === 'Active');
+    const rawIds = Array.from(
+      new Set(
+        text.split(/[\s,]+/)
+          .map(id => id.trim().toUpperCase())
+          .filter(Boolean)
+      )
+    );
+
+    const { data: dbStaff, error: staffError } = await supabase
+      .from('staff')
+      .select('id, name, role, team, status');
+
+    if (staffError) {
+      console.error('Staff lookup failed:', staffError);
+      alert('Staff စာရင်းဖတ်မရပါ: ' + staffError.message);
+      return;
+    }
+
+    const matchedStaff = (dbStaff ?? [])
+      .filter(s =>
+        rawIds.includes(String(s.id ?? '').trim().toUpperCase()) &&
+        String(s.status ?? '').trim().toLowerCase() === 'active'
+      )
+      .map(s => ({
+        id: String(s.id),
+        name: String(s.name ?? ''),
+        role: String(s.role ?? 'employee'),
+        team: String(s.team ?? ''),
+        status: String(s.status ?? 'Active')
+      }));
 
     if (matchedStaff.length === 0) {
-      alert('ထည့်သွင်းထားသော Staff ID များ မမှန်ကန်ပါ (သို့) Active မရှိပါ။');
+      alert('ထည့်ထားသော Staff ID မတွေ့ပါ၊ သို့မဟုတ် Staff သည် Active မဖြစ်ပါ။');
       return;
     }
 

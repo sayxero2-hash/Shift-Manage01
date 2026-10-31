@@ -767,10 +767,14 @@ export default function App() {
     if (!text) return;
 
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const normalizedText = text.toUpperCase().replace(
+      /\bPPS\b[\s,]+(\d+(?:[\s,]+\d+)*)/g,
+      (_, nums) => nums.split(/[\s,]+/).map((n: string) => 'PPS' + n).join(' ')
+    );
     const rawIds = Array.from(
       new Set(
-        text.split(/[\s,]+/)
-          .map(id => id.trim().toUpperCase())
+        normalizedText.split(/[\s,]+/)
+          .map(id => id.trim())
           .filter(Boolean)
       )
     );

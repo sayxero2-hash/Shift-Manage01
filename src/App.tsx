@@ -155,16 +155,16 @@ const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
     const inTime = parseTime(checkInStr);
     const outTime = parseTime(checkOutStr);
 
-    if (inTime === null || outTime === null) return 2;
+    if (inTime === null || outTime === null) return 0;
 
     let totalDuration = outTime - inTime;
     if (totalDuration < 0) totalDuration += 24;
 
     const workHoursWithoutLunch = Math.max(0, totalDuration - 1);
     const otHours = Math.max(0, workHoursWithoutLunch - 8);
-    return otHours > 0 ? Math.round(otHours * 10) / 10 : 2;
+    return Math.round(otHours * 10) / 10;
   } catch (e) {
-    return 2;
+    return 0;
   }
 };
 
@@ -264,7 +264,14 @@ export default function App() {
             isReplaced: r.isreplaced ?? false,
           })) as LiveShiftRecord[]);
         if (!requestResult.error && requestResult.data)
-          setSignupRequests(requestResult.data as SignupRequest[]);
+          setSignupRequests((requestResult.data || []).map((r: any) => ({
+          id: r.id,
+          name: r.name || '',
+          email: r.email || '',
+          status: r.status,
+          freeTrialDays: r.freetrialdays ?? 7,
+          assignedTeam: r.assignedteam || 'Team A',
+        })) as SignupRequest[]);
       } catch (err) {
         console.error('Initialization error:', err);
       } finally {
@@ -358,33 +365,45 @@ export default function App() {
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: identifier,
-      password: password,
+      email: identifier.trim(),
+      password,
     });
 
-    if (error) {
-      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ: ' + error.message);
+    if (error || !data.user) {
+      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ: ' + (error?.message || 'User not found'));
       return;
     }
 
-    if (data.user) {
-      let role: 'spd' | 'team_admin' | 'employee' = 'team_admin';
-      let assignedTeam = teams[0] || 'Team A';
+    const { data: approvedReq, error: requestError } = await supabase
+      .from('signup_requests')
+      .select('id, name, email, status, assignedteam')
+      .ilike('email', data.user.email || identifier.trim())
+      .maybeSingle();
 
-      const foundReq = signupRequests.find(r => r.email.toLowerCase() === identifier.toLowerCase() && r.status === 'Approved');
-      if (foundReq) {
-        role = 'team_admin';
-        assignedTeam = foundReq.assignedTeam;
-      }
+    if (
+      requestError ||
+      !approvedReq ||
+      approvedReq.status !== 'Approved' ||
+      !approvedReq.assignedteam
+    ) {
+      await supabase.auth.signOut();
 
-      const loggedUser: UserProfile = {
-        name: data.user.email?.split('@')[0] || identifier,
-        identifier: identifier,
-        role: role,
-        assignedTeam: assignedTeam,
-      };
-      setCurrentUser(loggedUser);
+      alert(
+        requestError
+          ? 'အကောင့်ခွင့်ပြုချက် စစ်ဆေးမရပါ။ Supabase/RLS ကို စစ်ဆေးပါ။'
+          : 'ဤအကောင့်ကို Admin မှ အတည်ပြုထားခြင်း မရှိသေးပါ။'
+      );
+      return;
     }
+
+    const loggedUser: UserProfile = {
+      name: approvedReq.name || data.user.email?.split('@')[0] || identifier,
+      identifier: data.user.email || identifier,
+      role: 'team_admin',
+      assignedTeam: approvedReq.assignedteam,
+    };
+
+    setCurrentUser(loggedUser);
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -410,7 +429,14 @@ export default function App() {
       assignedTeam: teams[0] || 'Team A'
     };
     
-    const { error: saveRequestError } = await supabase.from('signup_requests').upsert([newReq]);
+    const { error: saveRequestError } = await supabase.from('signup_requests').upsert([{
+      id: newReq.id,
+      name: newReq.name,
+      email: newReq.email,
+      status: newReq.status,
+      freetrialdays: newReq.freeTrialDays,
+      assignedteam: newReq.assignedTeam,
+    }]);
     if (saveRequestError) {
       console.error('Save signup request failed:', saveRequestError);
       alert('Signup request သိမ်းမရပါ: ' + saveRequestError.message);
@@ -433,7 +459,7 @@ export default function App() {
   };
 
   const handleUpdateReqTeam = async (id: string, assignedTeam: string) => {
-    const { error } = await supabase.from('signup_requests').update({ assignedTeam }).eq('id', id);
+    const { error } = await supabase.from('signup_requests').update({ assignedteam: assignedTeam }).eq('id', id);
     if (error) {
       console.error('Update request team failed:', error);
       alert('Request Team သိမ်းမရပါ: ' + error.message);
@@ -459,46 +485,129 @@ export default function App() {
   };
 
   const handleRenameTeam = async (oldTeamName: string) => {
-    const updatedName = prompt(`Team (${oldTeamName}) အတွက် နာမည်သစ် ရိုက်ထည့်ပါ:`, oldTeamName);
-    if (updatedName && updatedName.trim() !== '' && updatedName !== oldTeamName) {
-      const newName = updatedName.trim();
-      const updatedTeams = teams.map(t => t === oldTeamName ? newName : t);
-      
-      setTeams(updatedTeams);
-      await supabase.from('teams').delete().eq('name', oldTeamName);
-      await supabase.from('teams').upsert([{ name: newName }]);
+    const updatedName = prompt(
+      `Team (${oldTeamName}) အတွက် နာမည်သစ် ရိုက်ထည့်ပါ:`,
+      oldTeamName
+    );
 
-      const updatedStaff = staffList.map(s => s.team === oldTeamName ? { ...s, team: newName } : s);
-      setStaffList(updatedStaff);
-      for (const st of updatedStaff) {
-        if (st.team === newName) {
-          await supabase.from('staff').update({ team: newName }).eq('id', st.id);
-        }
-      }
-      alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ ပြောင်းလဲပြီးပါပြီ။`);
+    if (!updatedName || !updatedName.trim()) return;
+
+    const newName = updatedName.trim();
+    if (newName === oldTeamName) return;
+
+    if (teams.includes(newName)) {
+      alert('ဤ Team အမည် ရှိပြီးသားဖြစ်ပါသည်။');
+      return;
     }
+
+    // Add the new team first; do not delete the old team yet.
+    const { error: addError } = await supabase
+      .from('teams')
+      .insert([{ name: newName }]);
+
+    if (addError) {
+      console.error('Create renamed team failed:', addError);
+      alert('Team အသစ် သိမ်းမရပါ: ' + addError.message);
+      return;
+    }
+
+    // Update only staff assigned to the old team.
+    const { error: staffError } = await supabase
+      .from('staff')
+      .update({ team: newName })
+      .eq('team', oldTeamName);
+
+    if (staffError) {
+      console.error('Rename team staff update failed:', staffError);
+      alert('ဝန်ထမ်း Team ပြောင်းမရပါ။ Team အဟောင်းကို မဖျက်ထားပါ။ ' + staffError.message);
+      return;
+    }
+
+    const { error: recordsError } = await supabase
+      .from('live_records')
+      .update({ team: newName })
+      .eq('team', oldTeamName);
+
+    if (recordsError) {
+      console.error('Rename team live records update failed:', recordsError);
+      alert('အလုပ်မှတ်တမ်း Team ပြောင်းမရပါ။ Team အဟောင်းကို မဖျက်ထားပါ။ ' + recordsError.message);
+      return;
+    }
+
+    // Remove the old team only after the related updates succeed.
+    const { error: deleteOldError } = await supabase
+      .from('teams')
+      .delete()
+      .eq('name', oldTeamName);
+
+    if (deleteOldError) {
+      console.error('Delete old team failed:', deleteOldError);
+      alert('Team အဟောင်းကို မဖျက်နိုင်ပါ။ Team အသစ်နှင့် ဝန်ထမ်း/မှတ်တမ်းများကို စစ်ဆေးပါ။ ' + deleteOldError.message);
+      return;
+    }
+
+    setTeams(prev => prev.map(t => t === oldTeamName ? newName : t));
+    setStaffList(prev => prev.map(st =>
+      st.team === oldTeamName ? { ...st, team: newName } : st
+    ));
+    setLiveRecords(prev => prev.map(rec =>
+      rec.team === oldTeamName ? { ...rec, team: newName } : rec
+    ));
+
+    alert(`Team အမည်ကို (${oldTeamName}) မှ (${newName}) သို့ ပြောင်းလဲပြီးပါပြီ။`);
   };
 
   const handleSpdDeleteStaff = async (staffId: string, staffName: string) => {
-    if (confirm(`ဝန်ထမ်း ${staffName} (${staffId}) ကို ဖျက်ရန် သေချာပါသလား?`)) {
-      setStaffList(staffList.filter(s => s.id !== staffId));
-      setLiveRecords(liveRecords.filter(r => r.id !== staffId));
-      await supabase.from('staff').delete().eq('id', staffId);
-      await supabase.from('live_records').delete().eq('id', staffId);
-      alert(`ဝန်ထမ်း ${staffId} အောင်မြင်စွာ ဖျက်ပြီးပါပြီ။`);
+    if (!confirm(`ဝန်ထမ်း ${staffName} (${staffId}) ကို ဖယ်ရှားရန် သေချာပါသလား? အလုပ်မှတ်တမ်းများကို ထိန်းသိမ်းထားပါမည်။`)) {
+      return;
     }
+
+    // Delete staff only. Never delete live_records here.
+    const { error } = await supabase
+      .from('staff')
+      .delete()
+      .eq('id', staffId);
+
+    if (error) {
+      console.error('Delete staff failed:', error);
+      alert('ဝန်ထမ်းကို Database မှ ဖယ်ရှားမရပါ။ ဒေတာကို မပြောင်းထားပါ။ ' + error.message);
+      return;
+    }
+
+    setStaffList(prev => prev.filter(s => s.id !== staffId));
+
+    // Keep existing live_records in Supabase and in the local state.
+    alert(`ဝန်ထမ်း ${staffId} ကို ဖယ်ရှားပြီးပါပြီ။ အလုပ်မှတ်တမ်းများကို ထိန်းသိမ်းထားပါသည်။`);
   };
 
   const handleSpdDeleteEntireTeam = async (teamName: string) => {
-    if (confirm(`Team (${teamName}) ရှိ ဝန်ထမ်းအားလုံးကို ဖျက်ရန် သေချာပါသလား?`)) {
-      setTeams(teams.filter(t => t !== teamName));
-      setStaffList(staffList.filter(s => s.team !== teamName));
-      setLiveRecords(liveRecords.filter(r => r.team !== teamName));
-      
-      await supabase.from('teams').delete().eq('name', teamName);
-      await supabase.from('staff').delete().eq('team', teamName);
-      alert(`Team (${teamName}) ကို ဖျက်ပြီးပါပြီ။`);
+    if (!confirm(`Team (${teamName}) ကို ဖျက်ရန် သေချာပါသလား? အလုပ်မှတ်တမ်းများကို ထိန်းသိမ်းထားပါမည်။`)) {
+      return;
     }
+
+    // Do not remove a team while staff are still assigned to it.
+    const assignedStaff = staffList.filter(st => st.team === teamName);
+    if (assignedStaff.length > 0) {
+      alert(`ဤ Team တွင် ဝန်ထမ်း ${assignedStaff.length} ယောက် ရှိနေသေးပါသည်။ ဝန်ထမ်းများကို အခြား Team သို့ အရင်ပြောင်းပါ။ အလုပ်မှတ်တမ်းများကို မဖျက်ထားပါ။`);
+      return;
+    }
+
+    // Delete only the team row. Preserve all live_records.
+    const { error } = await supabase
+      .from('teams')
+      .delete()
+      .eq('name', teamName);
+
+    if (error) {
+      console.error('Delete team failed:', error);
+      alert('Team ကို Database မှ ဖျက်မရပါ။ ဒေတာကို မပြောင်းထားပါ။ ' + error.message);
+      return;
+    }
+
+    setTeams(prev => prev.filter(t => t !== teamName));
+
+    // Historical live_records are intentionally retained.
+    alert(`Team (${teamName}) ကို ဖျက်ပြီးပါပြီ။ အလုပ်မှတ်တမ်းများကို ထိန်းသိမ်းထားပါသည်။`);
   };
 
   const handleDirectAddStaff = async (e: React.FormEvent) => {
@@ -631,17 +740,26 @@ export default function App() {
     window.print();
   };
 
-  const handleUpdateLiveTime = async (id: string, field: 'checkIn' | 'checkOut') => {
+  const handleUpdateLiveTime = async (id: string, date: string, field: 'checkIn' | 'checkOut') => {
     const newVal = prompt(`Enter new ${field === 'checkIn' ? 'Check-in' : 'Check-out'} time:`, field === 'checkIn' ? '08:00 AM' : '07:00 PM');
-    if (newVal) {
-      const { error } = await supabase.from('live_records').update({ [field]: newVal }).eq('id', id);
-      if (error) {
-        console.error('Update shift time failed:', error);
-        alert('Shift အချိန် သိမ်းမရပါ: ' + error.message);
-        return;
-      }
-      setLiveRecords(prev => prev.map(r => r.id === id ? { ...r, [field]: newVal } : r));
+    if (newVal === null || !newVal.trim()) return;
+
+    const dbField = field === 'checkIn' ? 'checkin' : 'checkout';
+    const { error } = await supabase
+      .from('live_records')
+      .update({ [dbField]: newVal.trim() })
+      .eq('id', id)
+      .eq('date', date);
+
+    if (error) {
+      console.error('Update shift time failed:', error);
+      alert('Shift အချိန် သိမ်းမရပါ: ' + error.message);
+      return;
     }
+
+    setLiveRecords(prev => prev.map(r =>
+      r.id === id && r.date === date ? { ...r, [field]: newVal.trim() } : r
+    ));
   };
 
   const handleChatSubmit = async () => {
@@ -1079,13 +1197,13 @@ export default function App() {
 
                     <div className="flex gap-1">
                       <button 
-                        onClick={() => handleUpdateLiveTime(rec.id, 'checkIn')}
+                        onClick={() => handleUpdateLiveTime(rec.id, rec.date, 'checkIn')}
                         className="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1"
                       >
                         <Edit3 className="w-3 h-3" /> In
                       </button>
                       <button 
-                        onClick={() => handleUpdateLiveTime(rec.id, 'checkOut')}
+                        onClick={() => handleUpdateLiveTime(rec.id, rec.date, 'checkOut')}
                         className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1"
                       >
                         <Edit3 className="w-3 h-3" /> Out

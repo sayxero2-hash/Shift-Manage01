@@ -1120,7 +1120,9 @@ export default function App() {
                         CHECK OUT
                       </button>
                     </div>
-                    <input type="time" value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)}
+                    <input type="text" inputMode="text" placeholder="HH:MM" value={selectedTime}
+                      onChange={(e) => setSelectedTime(e.target.value)}
+                      maxLength={5} autoComplete="off"
                       className="bg-slate-950 text-sm font-bold text-indigo-300 border border-slate-700 rounded-lg px-2 py-1.5 outline-none w-full" />
                   </div>
 

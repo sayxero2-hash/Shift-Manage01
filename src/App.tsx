@@ -141,29 +141,36 @@ const translations = {
 
 const calculateOtHours = (checkInStr: string, checkOutStr: string): number => {
   try {
-    const parseTime = (timeStr: string) => {
-      const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (!match) return null;
-      let hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const ampm = match[3].toUpperCase();
-      if (ampm === 'PM' && hours < 12) hours += 12;
-      if (ampm === 'AM' && hours === 12) hours = 0;
-      return hours + minutes / 60;
+    const parseTime = (value: string): number | null => {
+      const time = String(value ?? '').trim();
+      if (!time) return null;
+
+      const ampm = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (ampm) {
+        let h = Number(ampm[1]);
+        const m = Number(ampm[2]);
+        if (h < 1 || h > 12 || m > 59) return null;
+        if (ampm[3].toUpperCase() === 'PM' && h < 12) h += 12;
+        if (ampm[3].toUpperCase() === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+      }
+
+      const match24 = time.match(/^(\d{1,2}):(\d{2})$/);
+      if (!match24) return null;
+      const h = Number(match24[1]);
+      const m = Number(match24[2]);
+      if (h > 23 || m > 59) return null;
+      return h * 60 + m;
     };
 
-    const inTime = parseTime(checkInStr);
-    const outTime = parseTime(checkOutStr);
-
-    if (inTime === null || outTime === null) return 0;
-
-    let totalDuration = outTime - inTime;
-    if (totalDuration < 0) totalDuration += 24;
-
-    const workHoursWithoutLunch = Math.max(0, totalDuration - 1);
-    const otHours = Math.max(0, workHoursWithoutLunch - 8);
-    return Math.round(otHours * 10) / 10;
-  } catch (e) {
+    const start = parseTime(checkInStr);
+    const end = parseTime(checkOutStr);
+    if (start === null || end === null) return 0;
+    let minutes = end - start;
+    if (minutes < 0) minutes += 1440;
+    const paidWorkHours = Math.max(0, minutes / 60 - 1);
+    return Math.round(Math.max(0, paidWorkHours - 8) * 10) / 10;
+  } catch {
     return 0;
   }
 };
@@ -207,7 +214,8 @@ export default function App() {
 
   const [bulkText, setBulkText] = useState('');
 
-  const [selectedShiftType, setSelectedShiftType] = useState<'Day' | 'Night'>('Day');
+  const [selectedAttendanceAction, setSelectedAttendanceAction] = useState<'Check In' | 'Check Out'>('Check In');
+  const [selectedTime, setSelectedTime] = useState('08:00');
   const [customDateTime, setCustomDateTime] = useState('21/10/2026');
   const [inputMessage, setInputMessage] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -767,129 +775,104 @@ export default function App() {
     if (!text) return;
 
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(selectedTime)) {
+      alert('အချိန်ကို 24-hour format ဖြင့် ရွေးပါ။');
+      return;
+    }
+
     const normalizedText = text.toUpperCase().replace(
       /\bPPS\b[\s,]+(\d+(?:[\s,]+\d+)*)/g,
       (_, nums) => nums.split(/[\s,]+/).map((n: string) => 'PPS' + n).join(' ')
     );
-    const rawIds = Array.from(
-      new Set(
-        normalizedText.split(/[\s,]+/)
-          .map(id => id.trim())
-          .filter(Boolean)
-      )
-    );
+    const rawIds = Array.from(new Set(
+      normalizedText.split(/[\s,]+/).map(id => id.trim()).filter(Boolean)
+    ));
 
     const { data: dbStaff, error: staffError } = await supabase
-      .from('staff')
-      .select('id, name, role, team, status');
+      .from('staff').select('id, name, role, team, status');
 
     if (staffError) {
-      console.error('Staff lookup failed:', staffError);
       alert('Staff စာရင်းဖတ်မရပါ: ' + staffError.message);
       return;
     }
 
-    const matchedStaff = (dbStaff ?? [])
-      .filter(s =>
-        rawIds.includes(String(s.id ?? '').trim().toUpperCase()) &&
-        String(s.status ?? '').trim().toLowerCase() === 'active'
-      )
-      .map(s => ({
-        id: String(s.id),
-        name: String(s.name ?? ''),
-        role: String(s.role ?? 'employee'),
-        team: String(s.team ?? ''),
-        status: String(s.status ?? 'Active')
-      }));
+    const matchedStaff = (dbStaff ?? []).filter(s =>
+      rawIds.includes(String(s.id ?? '').trim().toUpperCase()) &&
+      String(s.status ?? '').trim().toLowerCase() === 'active'
+    ).map(s => ({
+      id: String(s.id), name: String(s.name ?? ''),
+      role: String(s.role ?? 'employee'), team: String(s.team ?? ''),
+      status: String(s.status ?? 'Active')
+    }));
 
-    if (matchedStaff.length === 0) {
+    if (!matchedStaff.length) {
       alert('ထည့်ထားသော Staff ID မတွေ့ပါ၊ သို့မဟုတ် Staff သည် Active မဖြစ်ပါ။');
       return;
     }
 
-    const shiftTitleName = selectedShiftType === 'Day' ? 'Day Shift (08:00 AM - 07:00 PM)' : 'Night Shift (08:00 PM - 07:00 AM)';
-    const defaultCheckIn = selectedShiftType === 'Day' ? '08:00 AM' : '08:00 PM';
-    const defaultCheckOut = selectedShiftType === 'Day' ? '07:00 PM' : '07:00 AM';
+    const saved: LiveShiftRecord[] = [];
+    for (const st of matchedStaff) {
+      const { data: dbOld, error: readError } = await supabase
+        .from('live_records')
+        .select('id, name, shifttype, checkin, checkout, date, team, isreplaced')
+        .eq('id', st.id).eq('date', customDateTime).maybeSingle();
 
-    const duplicatedStaff: { staff: StaffMember; existing: LiveShiftRecord }[] = [];
-    const freshStaff: StaffMember[] = [];
-
-    matchedStaff.forEach(st => {
-      const existingRec = liveRecords.find(r => r.id.toUpperCase() === st.id.toUpperCase() && r.date === customDateTime);
-      if (existingRec) {
-        duplicatedStaff.push({ staff: st, existing: existingRec });
-      } else {
-        freshStaff.push(st);
-      }
-    });
-
-    if (duplicatedStaff.length > 0) {
-      const firstDup = duplicatedStaff[0];
-      setChatMessages(prev => [
-        ...prev,
-        { sender: 'user', text: inputMessage, time: currentTime },
-        { 
-          sender: 'bot', 
-          text: `⚠️ [DUPLICATE CHECK-IN WARNING]\n\nဝန်ထမ်း: ${firstDup.staff.name} (${firstDup.staff.id})\n• ရက်စွဲ: ${customDateTime}\n• လက်ရှိ Shift: ${firstDup.existing.shiftType}\n\n👉 ဤရက်အတွက် Shift အသစ် (${shiftTitleName}) သို့ အစားထိုး ပြောင်းလဲမည်လား?`, 
-          time: currentTime,
-          isWarningCard: true,
-          warningData: {
-            dupStaff: firstDup.staff,
-            existingShift: firstDup.existing,
-            newShiftType: shiftTitleName,
-            newDateTime: customDateTime,
-            checkInTime: defaultCheckIn,
-            checkOutTime: defaultCheckOut
-          }
-        }
-      ]);
-      setInputMessage('');
-      return;
-    }
-
-    const newLiveEntries: LiveShiftRecord[] = freshStaff.map(st => ({
-      id: st.id,
-      name: st.name,
-      shiftType: shiftTitleName,
-      checkIn: defaultCheckIn,
-      checkOut: defaultCheckOut,
-      date: customDateTime,
-      team: st.team
-    }));
-
-    for (const entry of newLiveEntries) {
-      const dbEntry = {
-        id: entry.id,
-        name: entry.name,
-        shifttype: entry.shiftType,
-        checkin: entry.checkIn,
-        checkout: entry.checkOut,
-        date: entry.date,
-        team: entry.team,
-      };
-      const { error } = await supabase.from('live_records').upsert([dbEntry]);
-      if (error) {
-        console.error('Save shift failed:', entry.id, error);
-        alert('Shift save failed for ' + entry.id + ': ' + error.message);
+      if (readError) {
+        alert('ရှိပြီးသား Attendance ကိုဖတ်မရပါ (' + st.id + '): ' + readError.message);
         return;
       }
-    }
-    const updatedLive = [...newLiveEntries, ...liveRecords];
-    setLiveRecords(updatedLive)
 
-    let otCalcHours = calculateOtHours(defaultCheckIn, defaultCheckOut);
-    let formattedText = `📌 [SHIFT ROSTER NOTIFICATION]\n📅 Date: ${customDateTime}\n⏰ Shift: ${shiftTitleName}\n👥 Total Staff: ${matchedStaff.length} Persons\n------------------------------\n`;
-    matchedStaff.forEach((st, idx) => {
-      formattedText += `${idx + 1}. ${st.id} - ${st.name} (${st.team}) [OT: ${otCalcHours}h]\n`;
+      const localOld = liveRecords.find(r =>
+        r.id.toUpperCase() === st.id.toUpperCase() && r.date === customDateTime
+      );
+      const checkInOld = String(dbOld?.checkin ?? localOld?.checkIn ?? '');
+      const checkOutOld = String(dbOld?.checkout ?? localOld?.checkOut ?? '');
+      const checkIn = selectedAttendanceAction === 'Check In' ? selectedTime : checkInOld;
+      const checkOut = selectedAttendanceAction === 'Check Out' ? selectedTime : checkOutOld;
+
+      const entry: LiveShiftRecord = {
+        id: st.id,
+        name: String(dbOld?.name ?? localOld?.name ?? st.name),
+        shiftType: String(dbOld?.shifttype ?? localOld?.shiftType ?? 'Custom Shift'),
+        checkIn, checkOut, date: customDateTime,
+        team: String(dbOld?.team ?? localOld?.team ?? st.team),
+        isReplaced: Boolean(dbOld?.isreplaced ?? localOld?.isReplaced ?? false)
+      };
+
+      const row: Record<string, unknown> = {
+        id: entry.id, name: entry.name, shifttype: entry.shiftType,
+        checkin: entry.checkIn, checkout: entry.checkOut,
+        date: entry.date, team: entry.team
+      };
+      if (dbOld?.isreplaced !== undefined && dbOld?.isreplaced !== null) {
+        row.isreplaced = dbOld.isreplaced;
+      }
+
+      const { error: saveError } = await supabase.from('live_records').upsert([row]);
+      if (saveError) {
+        alert('Attendance သိမ်းမရပါ (' + st.id + '): ' + saveError.message);
+        return;
+      }
+      saved.push(entry);
+    }
+
+    setLiveRecords(prev => {
+      const keys = new Set(saved.map(r => r.id.toUpperCase() + '|' + r.date));
+      return [...saved, ...prev.filter(r => !keys.has(r.id.toUpperCase() + '|' + r.date))];
     });
-    formattedText += `------------------------------\n✅ Saved to Supabase Database successfully!`;
+
+    let report = `📌 [ATTENDANCE UPDATE]\n📅 Date: ${customDateTime}\n🕒 Action: ${selectedAttendanceAction}\n⏰ Time: ${selectedTime}\n👥 Total Staff: ${saved.length}\n------------------------------\n`;
+    saved.forEach((r, i) => {
+      const ot = r.checkIn && r.checkOut ? `${calculateOtHours(r.checkIn, r.checkOut)}h` : 'Pending';
+      report += `${i + 1}. ${r.id} - ${r.name} (${r.team}) [In: ${r.checkIn || '--:--'} | Out: ${r.checkOut || '--:--'} | OT: ${ot}]\n`;
+    });
+    report += '------------------------------\n✅ Saved to Supabase.';
 
     setChatMessages(prev => [
       ...prev,
       { sender: 'user', text: inputMessage, time: currentTime },
-      { sender: 'bot', text: formattedText, time: currentTime, isFormattedList: true }
+      { sender: 'bot', text: report, time: currentTime, isFormattedList: true }
     ]);
-
     setInputMessage('');
   };
 
@@ -1125,16 +1108,20 @@ export default function App() {
 
               <div className="p-3 bg-slate-950 border-t border-slate-800 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase">{t.shiftLabel}:</span>
-                    <select 
-                      value={selectedShiftType} 
-                      onChange={(e) => setSelectedShiftType(e.target.value as 'Day' | 'Night')}
-                      className="bg-transparent text-xs font-bold text-indigo-400 outline-none w-full cursor-pointer"
-                    >
-                      <option value="Day" className="bg-slate-900">Day Shift (08:00 AM - 07:00 PM)</option>
-                      <option value="Night" className="bg-slate-900">Night Shift (08:00 PM - 07:00 AM)</option>
-                    </select>
+                  <div className="flex flex-col gap-2 bg-slate-900 border border-slate-800 px-2.5 py-2 rounded-xl">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase">Attendance:</span>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button type="button" onClick={() => setSelectedAttendanceAction('Check In')}
+                        className={`py-2 rounded-lg text-[11px] font-bold border ${selectedAttendanceAction === 'Check In' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>
+                        CHECK IN
+                      </button>
+                      <button type="button" onClick={() => setSelectedAttendanceAction('Check Out')}
+                        className={`py-2 rounded-lg text-[11px] font-bold border ${selectedAttendanceAction === 'Check Out' ? 'bg-amber-600 border-amber-400 text-white' : 'bg-slate-950 border-slate-700 text-slate-400'}`}>
+                        CHECK OUT
+                      </button>
+                    </div>
+                    <input type="time" value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)}
+                      className="bg-slate-950 text-sm font-bold text-indigo-300 border border-slate-700 rounded-lg px-2 py-1.5 outline-none w-full" />
                   </div>
 
                   <div className="flex flex-col gap-1 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl">

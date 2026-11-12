@@ -185,14 +185,7 @@ export default function App() {
   const [fullName, setFullName] = useState('');
   
   const [isInitializing, setIsInitializing] = useState(true);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    try {
-      const savedUser = localStorage.getItem('shiftmaster_current_user');
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
@@ -230,36 +223,113 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    let loading = false;
+    let requestVersion = 0;
+
+    const clearAppData = () => {
+      setCurrentUser(null);
+      setStaffList([]);
+      setTeams([]);
+      setLiveRecords([]);
+      setSignupRequests([]);
+    };
 
     const loadAppData = async (session: any) => {
-      if (!active || loading || !session) return;
-      loading = true;
+      const version = ++requestVersion;
+      if (!active || !session?.user) {
+        clearAppData();
+        setIsInitializing(false);
+        return;
+      }
+
+      setIsInitializing(true);
       try {
-        const [staffResult, teamResult, liveResult, requestResult] =
-          await Promise.all([
-            supabase.from('staff').select('*'),
-            supabase.from('teams').select('*'),
-            supabase.from('live_records').select('*'),
-            supabase.from('signup_requests').select('*'),
-          ]);
+        const user = session.user;
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id,email,full_name,status,team_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!active || version !== requestVersion) return;
+
+        if (profileError || !profile || profile.status !== 'active') {
+          clearAppData();
+          setIsInitializing(false);
+          alert(
+            profileError
+              ? 'Account ခွင့်ပြုချက် စစ်ဆေးမရပါ: ' + profileError.message
+              : 'ဤ Account ကို SPD Master မှ အတည်ပြုထားခြင်း မရှိသေးပါ။'
+          );
+          await supabase.auth.signOut();
+          return;
+        }
+
+        const { data: isSuperAdmin, error: roleError } = await supabase.rpc('has_role', {
+          _user_id: user.id,
+          _role: 'super_admin',
+        });
+
+        if (!active || version !== requestVersion) return;
+        if (roleError) throw roleError;
+
+        let assignedTeam = 'Unassigned';
+        if (profile.team_id) {
+          const { data: team, error: teamError } = await supabase
+            .from('teams')
+            .select('name')
+            .eq('id', profile.team_id)
+            .maybeSingle();
+
+          if (teamError) throw teamError;
+          assignedTeam = team?.name || 'Unassigned';
+        }
+
+        let role: UserProfile['role'] = 'employee';
+        if (isSuperAdmin === true) {
+          role = 'spd';
+        } else {
+          const { data: isTenantAdmin, error: tenantRoleError } = await supabase.rpc('has_role', {
+            _user_id: user.id,
+            _role: 'tenant_admin',
+          });
+          if (tenantRoleError) throw tenantRoleError;
+          role = isTenantAdmin === true ? 'team_admin' : 'employee';
+        }
+
+        const loggedUser: UserProfile = {
+          name: profile.full_name || user.email?.split('@')[0] || 'User',
+          identifier: user.email || profile.email || '',
+          role,
+          assignedTeam: role === 'spd' ? 'All Teams (Master)' : assignedTeam,
+        };
+
+        const [staffResult, teamResult, liveResult] = await Promise.all([
+          supabase.from('staff').select('*'),
+          supabase.from('teams').select('*'),
+          supabase.from('live_records').select('*'),
+        ]);
+
+        if (!active || version !== requestVersion) return;
 
         const errors = [
-          staffResult.error, teamResult.error,
-          liveResult.error, requestResult.error
+          staffResult.error,
+          teamResult.error,
+          liveResult.error,
         ].filter(Boolean);
 
         if (errors.length) {
           console.error('Supabase load errors:', errors);
-          alert('Database မှ Data ပြန်ဖတ်ရာတွင် ပြဿနာရှိပါသည်။\n' +
+          alert('Database Data ဖတ်ရာတွင် ပြဿနာရှိပါသည်:\n' +
             errors.map((e: any) => e.message).join('\n'));
         }
 
-        if (!active) return;
         if (!staffResult.error && staffResult.data)
           setStaffList(staffResult.data as StaffMember[]);
+
         if (!teamResult.error && teamResult.data)
           setTeams(teamResult.data.map((t: any) => t.name).filter(Boolean));
+
         if (!liveResult.error && liveResult.data)
           setLiveRecords(liveResult.data.map((r: any) => ({
             id: r.id,
@@ -271,38 +341,71 @@ export default function App() {
             team: r.team || '',
             isReplaced: r.isreplaced ?? false,
           })) as LiveShiftRecord[]);
-        if (!requestResult.error && requestResult.data)
-          setSignupRequests((requestResult.data || []).map((r: any) => ({
-          id: r.id,
-          name: r.name || '',
-          email: r.email || '',
-          status: r.status,
-          freeTrialDays: r.freetrialdays ?? 7,
-          assignedTeam: r.assignedteam || 'Team A',
-        })) as SignupRequest[]);
-      } catch (err) {
-        console.error('Initialization error:', err);
+
+        if (role === 'spd') {
+          const { data: requests, error: requestError } = await supabase
+            .from('signup_requests')
+            .select('*')
+            .order('id', { ascending: false });
+
+          if (!active || version !== requestVersion) return;
+          if (requestError) {
+            console.error('Signup request load failed:', requestError);
+            alert('Signup Request ဖတ်မရပါ: ' + requestError.message);
+          } else {
+            setSignupRequests((requests || []).map((r: any) => ({
+              id: r.id,
+              name: r.name || '',
+              email: r.email || '',
+              status: r.status,
+              freeTrialDays: r.freetrialdays ?? 7,
+              assignedTeam: r.assignedteam || '',
+            })) as SignupRequest[]);
+          }
+        } else {
+          setSignupRequests([]);
+        }
+
+        if (!active || version !== requestVersion) return;
+        setCurrentUser(loggedUser);
+      } catch (err: any) {
+        console.error('Authentication initialization failed:', err);
+        if (active && version === requestVersion) {
+          clearAppData();
+          alert('App စတင်ရာတွင် ပြဿနာရှိပါသည်: ' + (err?.message || String(err)));
+          await supabase.auth.signOut();
+        }
       } finally {
-        loading = false;
-        if (active) setIsInitializing(false);
+        if (active && version === requestVersion) setIsInitializing(false);
       }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === 'SIGNED_OUT' || !session) {
+          requestVersion++;
+          clearAppData();
           setIsInitializing(false);
           return;
         }
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-          setIsInitializing(true);
-          void loadAppData(session);
+
+        if (
+          event === 'SIGNED_IN' ||
+          event === 'INITIAL_SESSION' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED'
+        ) {
+          // Run after the auth callback to avoid blocking Supabase auth processing.
+          setTimeout(() => {
+            if (active) void loadAppData(session);
+          }, 0);
         }
       }
     );
 
     return () => {
       active = false;
+      requestVersion++;
       subscription.unsubscribe();
     };
   }, []);
@@ -338,89 +441,35 @@ export default function App() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier || !password) return;
+    const email = identifier.trim().toLowerCase();
+    if (!email || !password) return;
 
-    if (identifier.trim().toLowerCase() === 'sayxero2@gmail.com') {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: identifier.trim(),
-        password,
-      });
-
-      if (error || !data.user) {
-        alert('SPD Master login မအောင်မြင်ပါ: ' + (error?.message || 'User not found'));
-        return;
-      }
-
-      const { data: isSuperAdmin, error: roleError } = await supabase.rpc('has_role', {
-        _user_id: data.user.id,
-        _role: 'super_admin',
-      });
-
-      if (roleError || isSuperAdmin !== true) {
-        await supabase.auth.signOut();
-        alert('ဤအကောင့်တွင် super_admin အခွင့်အာဏာ မရှိပါ။');
-        return;
-      }
-
-      const spdUser: UserProfile = {
-        name: 'SPD Master',
-        identifier: data.user.email || identifier,
-        role: 'spd',
-        assignedTeam: 'All Teams (Master)',
-      };
-      setCurrentUser(spdUser);
-      return;
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: identifier.trim(),
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
       password,
     });
 
-    if (error || !data.user) {
-      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ: ' + (error?.message || 'User not found'));
-      return;
+    if (error) {
+      alert('အကောင့်ဝင်ရန် မအောင်မြင်ပါ: ' + error.message);
     }
-
-    const { data: approvedReq, error: requestError } = await supabase
-      .from('signup_requests')
-      .select('id, name, email, status, assignedteam')
-      .ilike('email', data.user.email || identifier.trim())
-      .maybeSingle();
-
-    if (
-      requestError ||
-      !approvedReq ||
-      approvedReq.status !== 'Approved' ||
-      !approvedReq.assignedteam
-    ) {
-      await supabase.auth.signOut();
-
-      alert(
-        requestError
-          ? 'အကောင့်ခွင့်ပြုချက် စစ်ဆေးမရပါ။ Supabase/RLS ကို စစ်ဆေးပါ။'
-          : 'ဤအကောင့်ကို Admin မှ အတည်ပြုထားခြင်း မရှိသေးပါ။'
-      );
-      return;
-    }
-
-    const loggedUser: UserProfile = {
-      name: approvedReq.name || data.user.email?.split('@')[0] || identifier,
-      identifier: data.user.email || identifier,
-      role: 'team_admin',
-      assignedTeam: approvedReq.assignedteam,
-    };
-
-    setCurrentUser(loggedUser);
+    // Auth listener verifies profiles.status and role before showing the app.
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier || !password || !fullName) return;
+    const email = identifier.trim().toLowerCase();
 
-    const { error } = await supabase.auth.signUp({
-      email: identifier,
-      password: password,
+    if (!email || !password || !fullName.trim()) {
+      alert('အမည်၊ Email နှင့် Password အားလုံး ဖြည့်ပေးပါ။');
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName.trim() },
+      },
     });
 
     if (error) {
@@ -428,42 +477,49 @@ export default function App() {
       return;
     }
 
-    const newReq: SignupRequest = {
-      id: 'req_' + Date.now(),
-      name: fullName,
-      email: identifier,
-      status: 'Pending',
-      freeTrialDays: 7,
-      assignedTeam: teams[0] || 'Team A'
-    };
-    
-    const { error: saveRequestError } = await supabase.from('signup_requests').upsert([{
-      id: newReq.id,
-      name: newReq.name,
-      email: newReq.email,
-      status: newReq.status,
-      freetrialdays: newReq.freeTrialDays,
-      assignedteam: newReq.assignedTeam,
-    }]);
-    if (saveRequestError) {
-      console.error('Save signup request failed:', saveRequestError);
-      alert('Signup request သိမ်းမရပါ: ' + saveRequestError.message);
-      return;
+    if (data.session) {
+      await supabase.auth.signOut();
     }
-    setSignupRequests(prev => [newReq, ...prev]);
-    
-    alert('အကောင့်ဖွင့်ခြင်း တောင်းဆိုမှု အောင်မြင်ပါသည်။ SPD မာစတာမှ အတည်ပြုပေးရန် စောင့်ဆိုင်းနေပါသည်။');
+
+    alert('အကောင့်ဖွင့်ရန် တောင်းဆိုမှု ပေးပို့ပြီးပါပြီ။ SPD Master မှ အတည်ပြုပေးရန် စောင့်ဆိုင်းပါ။');
+    setPassword('');
     setAuthMode('login');
   };
 
   const handleApproveRequest = async (id: string, status: 'Approved' | 'Rejected') => {
-    const { error } = await supabase.from('signup_requests').update({ status }).eq('id', id);
-    if (error) {
-      console.error('Update signup status failed:', error);
-      alert('Request status သိမ်းမရပါ: ' + error.message);
+    const request = signupRequests.find(r => r.id === id);
+    if (!request) {
+      alert('Signup Request ကို ရှာမတွေ့ပါ။ ပြန်လည် Refresh လုပ်ပါ။');
       return;
     }
-    setSignupRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+
+    if (status === 'Approved' && !request.assignedTeam?.trim()) {
+      alert('Approve မလုပ်မီ Team တစ်ခု ရွေးပေးပါ။');
+      return;
+    }
+
+    const { data, error } = await supabase.rpc('process_signup_request', {
+      p_request_id: id,
+      p_status: status,
+    });
+
+    if (error) {
+      console.error('Process signup request failed:', error);
+      alert('Request သိမ်းမရပါ: ' + error.message);
+      return;
+    }
+
+    if (data && data.success === false) {
+      alert('Request မအောင်မြင်ပါ: ' + (data.message || 'Unknown error'));
+      return;
+    }
+
+    setSignupRequests(prev =>
+      prev.map(r => r.id === id ? { ...r, status } : r)
+    );
+    alert(status === 'Approved'
+      ? 'Account ကို အတည်ပြုပြီးပါပြီ။'
+      : 'Account Request ကို Reject လုပ်ပြီးပါပြီ။');
   };
 
   const handleUpdateReqTeam = async (id: string, assignedTeam: string) => {

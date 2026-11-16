@@ -523,13 +523,26 @@ export default function App() {
   };
 
   const handleUpdateReqTeam = async (id: string, assignedTeam: string) => {
-    const { error } = await supabase.from('signup_requests').update({ assignedteam: assignedTeam }).eq('id', id);
+    const { data, error } = await supabase.rpc('update_signup_request_team', {
+      p_request_id: id,
+      p_team_name: assignedTeam,
+    });
+
     if (error) {
       console.error('Update request team failed:', error);
       alert('Request Team သိမ်းမရပါ: ' + error.message);
       return;
     }
-    setSignupRequests(prev => prev.map(r => r.id === id ? { ...r, assignedTeam } : r));
+
+    if (data && data.success === false) {
+      alert('Request Team ပြောင်းမရပါ: ' + (data.message || 'Unknown error'));
+      return;
+    }
+
+    setSignupRequests(prev =>
+      prev.map(r => r.id === id ? { ...r, assignedTeam } : r)
+    );
+    alert('Team ကို Database တွင် အောင်မြင်စွာ ပြောင်းပြီးပါပြီ။');
   };
 
   const handleAddTeam = async (e: React.FormEvent) => {
